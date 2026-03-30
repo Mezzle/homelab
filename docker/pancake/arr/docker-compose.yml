@@ -166,6 +166,7 @@ services:
       OPENVPN_USER: ${PIA_USER}
       OPENVPN_PASSWORD: ${PIA_PASS}
       SERVER_REGIONS: ${PIA_REGION:-Netherlands}
+      DOT: "off"
       # Uncomment for WireGuard instead of OpenVPN:
       # VPN_TYPE: wireguard
     # Port 9696 only exposed locally for debugging — Tailscale handles external access
