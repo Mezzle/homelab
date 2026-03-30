@@ -96,8 +96,6 @@ volumes:
       device: //${NAS_HOST}/${NAS_BACKUP_SHARE}
       o: "addr=${NAS_HOST},username=${NAS_USER},password=${NAS_PASS},uid=1001,gid=1001,iocharset=utf8,vers=3.0"
 
-  seedbox-data:
-
 ##############################################################################
 # Services
 ##############################################################################
@@ -124,7 +122,7 @@ services:
     environment:
       <<: *common-env
     volumes:
-      - seedbox-data:/mnt/seedbox:shared
+      - ./appdata/seedbox:/mnt/seedbox:shared
       - ./config/seedbox:/config/seedbox:ro,z
     command: >
       mount
@@ -258,7 +256,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ./appdata/sonarr:/config:z
       - nas-media:/data/media
-      - seedbox-data:/data/seedbox:ro
+      - ./appdata/seedbox:/data/seedbox:ro
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "curl", "-f", "http://localhost:8989/ping"]
@@ -291,7 +289,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ./appdata/radarr:/config:z
       - nas-media:/data/media
-      - seedbox-data:/data/seedbox:ro
+      - ./appdata/seedbox:/data/seedbox:ro
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "curl", "-f", "http://localhost:7878/ping"]
