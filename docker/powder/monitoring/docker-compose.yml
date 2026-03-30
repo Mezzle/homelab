@@ -84,7 +84,7 @@ services:
     ports:
       - 3001:3001
     volumes:
-      - ./appdata/uptime-kuma:/app/data
+      - ./appdata/uptime-kuma:/app/data:z
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "curl", "-f", "http://localhost:3001/"]
@@ -128,8 +128,8 @@ services:
           --storage.path=/alertmanager \
           --cluster.listen-address=""
     volumes:
-      - ./config/alertmanager/alertmanager.yml.tmpl:/etc/alertmanager/alertmanager.yml.tmpl:ro
-      - ./appdata/alertmanager:/alertmanager
+      - ./config/alertmanager/alertmanager.yml.tmpl:/etc/alertmanager/alertmanager.yml.tmpl:ro,z
+      - ./appdata/alertmanager:/alertmanager:z
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
@@ -150,8 +150,8 @@ services:
       TS_HOSTNAME: uptime-kuma
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/uptime-kuma/state:/var/lib/tailscale
-      - ./config/tailscale/uptime-kuma/serve.json:/config/serve.json:ro
+      - ./config/tailscale/uptime-kuma/state:/var/lib/tailscale:z
+      - ./config/tailscale/uptime-kuma/serve.json:/config/serve.json:ro,z
 
   ts-alertmanager:
     <<: *tailscale-sidecar
@@ -165,5 +165,5 @@ services:
       TS_HOSTNAME: alertmanager
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/alertmanager/state:/var/lib/tailscale
-      - ./config/tailscale/alertmanager/serve.json:/config/serve.json:ro
+      - ./config/tailscale/alertmanager/state:/var/lib/tailscale:z
+      - ./config/tailscale/alertmanager/serve.json:/config/serve.json:ro,z

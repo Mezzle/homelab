@@ -125,7 +125,7 @@ services:
       <<: *common-env
     volumes:
       - seedbox-data:/mnt/seedbox:shared
-      - ./config/seedbox:/config/seedbox:ro
+      - ./config/seedbox:/config/seedbox:ro,z
     command: >
       mount
         :sftp,host=${SEEDBOX_HOST},user=${SEEDBOX_USER},port=${SEEDBOX_PORT:-22},key_file=/config/seedbox/id_rsa
@@ -174,7 +174,7 @@ services:
     ports:
       - 127.0.0.1:9696:9696
     volumes:
-      - ./config/gluetun:/gluetun
+      - ./config/gluetun:/gluetun:z
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "-q", "--spider", "http://ifconfig.me"]
@@ -225,7 +225,7 @@ services:
       <<: *common-env
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - ./appdata/prowlarr:/config
+      - ./appdata/prowlarr:/config:z
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "curl", "-f", "http://localhost:9696/ping"]
@@ -256,7 +256,7 @@ services:
       <<: *common-env
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - ./appdata/sonarr:/config
+      - ./appdata/sonarr:/config:z
       - nas-media:/data/media
       - seedbox-data:/data/seedbox:ro
     healthcheck:
@@ -289,7 +289,7 @@ services:
       <<: *common-env
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - ./appdata/radarr:/config
+      - ./appdata/radarr:/config:z
       - nas-media:/data/media
       - seedbox-data:/data/seedbox:ro
     healthcheck:
@@ -322,7 +322,7 @@ services:
       <<: *common-env
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - ./appdata/bazarr:/config
+      - ./appdata/bazarr:/config:z
       - nas-media:/data/media
     healthcheck:
       <<: *healthcheck-defaults
@@ -354,7 +354,7 @@ services:
       SONARR_API_KEY: ${SONARR_API_KEY}
       RADARR_API_KEY: ${RADARR_API_KEY}
     volumes:
-      - ./config/recyclarr:/config
+      - ./config/recyclarr:/config:z
     logging: *default-logging
 
   ##########################################################################
@@ -442,8 +442,8 @@ services:
       BACKUP_VERIFY_CRON: "0 12 1 * *"
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
     volumes:
-      - ./appdata:/appdata:ro
-      - ./scripts/backup.sh:/backup.sh:ro
+      - ./appdata:/appdata:ro,z
+      - ./scripts/backup.sh:/backup.sh:ro,z
       - nas-backup:/nas
     entrypoint: /bin/sh
     command: >
@@ -489,7 +489,7 @@ services:
       # NVIDIA_VISIBLE_DEVICES: all
       # NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
     volumes:
-      - ./appdata/plex:/config
+      - ./appdata/plex:/config:z
       - nas-media:/media:ro
     healthcheck:
       <<: *healthcheck-defaults
@@ -518,8 +518,8 @@ services:
       TS_HOSTNAME: sonarr
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/sonarr/state:/var/lib/tailscale
-      - ./config/tailscale/sonarr/serve.json:/config/serve.json:ro
+      - ./config/tailscale/sonarr/state:/var/lib/tailscale:z
+      - ./config/tailscale/sonarr/serve.json:/config/serve.json:ro,z
 
   ts-radarr:
     <<: *tailscale-sidecar
@@ -533,8 +533,8 @@ services:
       TS_HOSTNAME: radarr
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/radarr/state:/var/lib/tailscale
-      - ./config/tailscale/radarr/serve.json:/config/serve.json:ro
+      - ./config/tailscale/radarr/state:/var/lib/tailscale:z
+      - ./config/tailscale/radarr/serve.json:/config/serve.json:ro,z
 
   ts-prowlarr:
     <<: *tailscale-sidecar
@@ -548,8 +548,8 @@ services:
       TS_HOSTNAME: prowlarr
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/prowlarr/state:/var/lib/tailscale
-      - ./config/tailscale/prowlarr/serve.json:/config/serve.json:ro
+      - ./config/tailscale/prowlarr/state:/var/lib/tailscale:z
+      - ./config/tailscale/prowlarr/serve.json:/config/serve.json:ro,z
 
   ts-bazarr:
     <<: *tailscale-sidecar
@@ -563,8 +563,8 @@ services:
       TS_HOSTNAME: bazarr
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/bazarr/state:/var/lib/tailscale
-      - ./config/tailscale/bazarr/serve.json:/config/serve.json:ro
+      - ./config/tailscale/bazarr/state:/var/lib/tailscale:z
+      - ./config/tailscale/bazarr/serve.json:/config/serve.json:ro,z
 
   ts-plex:
     <<: *tailscale-sidecar
@@ -580,5 +580,5 @@ services:
       TS_HOSTNAME: plex
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/plex/state:/var/lib/tailscale
-      - ./config/tailscale/plex/serve.json:/config/serve.json:ro
+      - ./config/tailscale/plex/state:/var/lib/tailscale:z
+      - ./config/tailscale/plex/serve.json:/config/serve.json:ro,z

@@ -83,7 +83,7 @@ services:
       <<: *common-env
       DOCKGE_STACKS_DIR: /stacks
     volumes:
-      - ./appdata/dockge:/app/data
+      - ./appdata/dockge:/app/data:z
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Mount the parent stacks directory so Dockge can see all stacks
       - /srv/docker:/stacks:ro
@@ -124,7 +124,7 @@ services:
       HOMEPAGE_VAR_ADGUARD_USER: ${ADGUARD_USER:-admin}
       HOMEPAGE_VAR_ADGUARD_PASS: ${ADGUARD_PASS:-}
     volumes:
-      - ./config/homepage:/app/config
+      - ./config/homepage:/app/config:z
       - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
       <<: *healthcheck-defaults
@@ -156,7 +156,7 @@ services:
       DIUN_PROVIDERS_DOCKER: "true"
       DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT: "true"
     volumes:
-      - ./appdata/diun:/data
+      - ./appdata/diun:/data:z
       - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
       <<: *healthcheck-defaults
@@ -178,8 +178,8 @@ services:
       TS_HOSTNAME: homepage
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/homepage/state:/var/lib/tailscale
-      - ./config/tailscale/homepage/serve.json:/config/serve.json:ro
+      - ./config/tailscale/homepage/state:/var/lib/tailscale:z
+      - ./config/tailscale/homepage/serve.json:/config/serve.json:ro,z
 
   ts-dockge:
     <<: *tailscale-sidecar
@@ -193,5 +193,5 @@ services:
       TS_HOSTNAME: dockge
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/dockge/state:/var/lib/tailscale
-      - ./config/tailscale/dockge/serve.json:/config/serve.json:ro
+      - ./config/tailscale/dockge/state:/var/lib/tailscale:z
+      - ./config/tailscale/dockge/serve.json:/config/serve.json:ro,z

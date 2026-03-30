@@ -95,8 +95,8 @@ services:
       - '--storage.tsdb.retention.size=500MB'
       - '--web.enable-lifecycle'
     volumes:
-      - ./config/prometheus:/etc/prometheus:ro
-      - ./appdata/prometheus:/prometheus
+      - ./config/prometheus:/etc/prometheus:ro,z
+      - ./appdata/prometheus:/prometheus:z
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
@@ -133,8 +133,8 @@ services:
           --config.file=/tmp/alertmanager.yml \
           --storage.path=/alertmanager
     volumes:
-      - ./config/alertmanager/alertmanager.yml.tmpl:/etc/alertmanager/alertmanager.yml.tmpl:ro
-      - ./appdata/alertmanager:/alertmanager
+      - ./config/alertmanager/alertmanager.yml.tmpl:/etc/alertmanager/alertmanager.yml.tmpl:ro,z
+      - ./appdata/alertmanager:/alertmanager:z
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
@@ -219,5 +219,5 @@ services:
       TS_HOSTNAME: prometheus
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/prometheus/state:/var/lib/tailscale
-      - ./config/tailscale/prometheus/serve.json:/config/serve.json:ro
+      - ./config/tailscale/prometheus/state:/var/lib/tailscale:z
+      - ./config/tailscale/prometheus/serve.json:/config/serve.json:ro,z

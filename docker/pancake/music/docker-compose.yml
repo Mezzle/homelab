@@ -76,7 +76,7 @@ services:
     environment:
       <<: *common-env
     volumes:
-      - ./appdata:/data
+      - ./appdata:/data:z
       - /mnt/storage/media/music:/media/music:ro
     healthcheck:
       <<: *healthcheck-defaults
@@ -101,5 +101,5 @@ services:
       TS_HOSTNAME: music
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/music-assistant/state:/var/lib/tailscale
-      - ./config/tailscale/music-assistant/serve.json:/config/serve.json:ro
+      - ./config/tailscale/music-assistant/state:/var/lib/tailscale:z
+      - ./config/tailscale/music-assistant/serve.json:/config/serve.json:ro,z

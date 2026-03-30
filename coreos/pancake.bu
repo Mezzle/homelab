@@ -19,10 +19,10 @@
 #      Then update mnt-storage.mount with the correct by-id path.
 #   3. Format HDD if needed:  sudo mkfs.ext4 /dev/disk/by-id/<YOUR-HDD-ID>
 #   4. Start storage mount:  sudo systemctl start mnt-storage.mount
-#   5. Set up the git repo (one-time):
-#        cd /srv && git clone <your-repo> .
-#        cp .env.example .env && vim .env
-#   6. Start all stacks:  make -C /srv/docker/pancake up-all
+#   5. Run the bootstrap script:
+#        curl -sL https://raw.githubusercontent.com/mez-0/arr/main/scripts/bootstrap.sh \
+#          | bash -s -- docker/pancake
+#      Or manually: clone repo to /srv, then ./scripts/bootstrap.sh docker/pancake
 #
 # After that, just push to git — the gitops-sync timer pulls changes
 # every 5 minutes and applies them automatically.

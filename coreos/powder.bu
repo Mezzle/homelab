@@ -17,10 +17,10 @@
 # After first boot:
 #   1. Wait for uCore auto-rebase (~2 reboots, ~5-10 min total)
 #   2. SSH in:  ssh mez@powder  (via Tailscale)
-#   3. Set up the git repo (one-time):
-#        cd /srv && git clone <your-repo> .
-#   4. Sync secrets:  ./scripts/sync-secrets.sh docker/powder/monitoring
-#   5. Start stacks:  make -C /srv/docker/powder up-all
+#   3. Run the bootstrap script:
+#        curl -sL https://raw.githubusercontent.com/mez-0/arr/main/scripts/bootstrap.sh \
+#          | bash -s -- docker/powder
+#      Or manually: clone repo to /srv, then ./scripts/bootstrap.sh docker/powder
 #
 # After that, just push to git — the gitops-sync timer pulls changes
 # every 5 minutes and applies them automatically.

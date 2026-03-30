@@ -167,7 +167,7 @@ services:
       POSTGRES_DB: ${DB_DATABASE_NAME:-immich}
       POSTGRES_INITDB_ARGS: "--data-checksums"
     volumes:
-      - ${DB_DATA_LOCATION:-./appdata/postgres}:/var/lib/postgresql/data
+      - ${DB_DATA_LOCATION:-./appdata/postgres}:/var/lib/postgresql/data:z
     healthcheck:
       disable: false
     logging: *default-logging
@@ -206,5 +206,5 @@ services:
       TS_HOSTNAME: immich
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/immich/state:/var/lib/tailscale
-      - ./config/tailscale/immich/serve.json:/config/serve.json:ro
+      - ./config/tailscale/immich/state:/var/lib/tailscale:z
+      - ./config/tailscale/immich/serve.json:/config/serve.json:ro,z
