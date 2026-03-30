@@ -145,16 +145,23 @@ fi
 # Step 4: Sync secrets
 ###############################################################################
 log "Syncing secrets for $SERVER_DIR..."
-"$REPO_DIR/scripts/sync-secrets.sh" "$SERVER_DIR/infra" || warn "infra secrets sync had issues"
-"$REPO_DIR/scripts/sync-secrets.sh" "$SERVER_DIR/monitoring" || warn "monitoring secrets sync had issues"
+for stack_dir in "$REPO_DIR/$SERVER_DIR"/*/; do
+  [[ -f "$stack_dir/.env.example" ]] || continue
+  stack_name="$SERVER_DIR/$(basename "$stack_dir")"
+  "$REPO_DIR/scripts/sync-secrets.sh" "$stack_name" || warn "$stack_name secrets sync had issues"
+done
 
 ###############################################################################
 # Step 5: Start stacks
 ###############################################################################
 log "Starting Docker stacks..."
-make -C "$REPO_DIR/$SERVER_DIR" up-all
+for stack_dir in "$REPO_DIR/$SERVER_DIR"/*/; do
+  [[ -f "$stack_dir/docker-compose.yml" ]] || continue
+  stack_name=$(basename "$stack_dir")
+  log "Starting $stack_name..."
+  docker compose -f "$stack_dir/docker-compose.yml" up -d --remove-orphans || warn "$stack_name failed to start"
+done
 
 log ""
 log "Bootstrap complete! Verify with:"
 log "  docker ps"
-log "  make -C /srv/$SERVER_DIR status"
