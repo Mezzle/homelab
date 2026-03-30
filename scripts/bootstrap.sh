@@ -35,7 +35,7 @@ log()  { echo -e "${GREEN}[bootstrap]${NC} $*"; }
 warn() { echo -e "${YELLOW}[bootstrap]${NC} $*"; }
 fail() { echo -e "${RED}[bootstrap]${NC} $*"; exit 1; }
 
-REPO_URL="git@github.com:mez-0/arr.git"
+REPO_URL="git@github.com:mezzle/homelab.git"
 REPO_DIR="/srv"
 TOKEN_FILE="/etc/1password-service-account.env"
 
@@ -104,6 +104,12 @@ fi
 if [[ -d "$REPO_DIR/.git" ]]; then
   log "Repo already cloned at $REPO_DIR"
   cd "$REPO_DIR"
+  for key in ~/.ssh/deploy_key ~/.ssh/id_ed25519; do
+    if [[ -f "$key" ]]; then
+      export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes"
+      break
+    fi
+  done
   git pull --ff-only || warn "git pull failed — continuing with existing state"
 else
   log "Cloning repo to $REPO_DIR..."
@@ -111,12 +117,27 @@ else
   warn "Generate one with: ssh-keygen -t ed25519 -f ~/.ssh/deploy_key -N ''"
   echo ""
 
-  if [[ ! -f ~/.ssh/deploy_key ]] && [[ ! -f ~/.ssh/id_ed25519 ]]; then
+  # Find the SSH deploy key
+  DEPLOY_KEY=""
+  for key in ~/.ssh/deploy_key ~/.ssh/id_ed25519; do
+    if [[ -f "$key" ]]; then
+      DEPLOY_KEY="$key"
+      break
+    fi
+  done
+
+  if [[ -z "$DEPLOY_KEY" ]]; then
     warn "No SSH key found. You may need to set one up first."
+    warn "Generate one with: ssh-keygen -t ed25519 -f ~/.ssh/deploy_key -N ''"
     read -rp "Press Enter to continue or Ctrl+C to abort..."
   fi
 
-  git clone "$REPO_URL" "$REPO_DIR"
+  if [[ -n "$DEPLOY_KEY" ]]; then
+    GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+      git clone "$REPO_URL" "$REPO_DIR"
+  else
+    git clone "$REPO_URL" "$REPO_DIR"
+  fi
   log "Repo cloned"
 fi
 

@@ -81,6 +81,14 @@ storage:
 
   files:
     ##################################################################
+    # Hostname
+    ##################################################################
+    - path: /etc/hostname
+      mode: 0644
+      contents:
+        inline: charm
+
+    ##################################################################
     # Zincati — automatic OS update strategy
     # Reboots only on Sundays between 04:00-05:00 UTC
     # NOTE: Zincati may be inactive after uCore rebase. If so, use
