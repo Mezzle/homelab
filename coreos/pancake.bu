@@ -64,34 +64,9 @@ passwd:
 ########################################
 storage:
   directories:
-    # Repo root (cloned to /srv, docker/ subdir maps to /srv/docker/)
-    - path: /srv
-      mode: 0755
-      user: { name: mez }
-      group: { name: mez }
-
-    # Stack directories (populated via git clone)
-    - path: /srv/docker/pancake/arr
-      mode: 0755
-      user: { name: mez }
-      group: { name: mez }
-
-    - path: /srv/docker/pancake/immich
-      mode: 0755
-      user: { name: mez }
-      group: { name: mez }
-
-    - path: /srv/docker/pancake/music
-      mode: 0755
-      user: { name: mez }
-      group: { name: mez }
-
-    - path: /srv/docker/pancake/infra
-      mode: 0755
-      user: { name: mez }
-      group: { name: mez }
-
-    - path: /srv/docker/pancake/observability
+    # Repo root — /srv is a symlink to /var/srv on FCOS
+    # Don't create subdirectories here; git clone provides them
+    - path: /var/srv
       mode: 0755
       user: { name: mez }
       group: { name: mez }
@@ -233,7 +208,7 @@ storage:
           echo ""
           echo "  uCore — $(rpm-ostree status --booted | grep -oP 'Version: \K\S+' || echo 'unknown')"
           echo "  Host: pancake (i7-5700HQ / 16GB / GTX 970M)"
-          echo "  Tailscale: $(tailscale status --self 2>/dev/null | awk '{print $1}' || echo 'not connected')"
+          echo "  Tailscale: $(tailscale status --self --peers=false 2>/dev/null | awk '{print $1}' || echo 'not connected')"
           echo "  Cockpit:   https://localhost:9090"
           echo "  Stacks:    /srv/docker/pancake/{arr,immich,music,infra,observability}"
           echo "  Commands:  make -C /srv/docker/pancake help"

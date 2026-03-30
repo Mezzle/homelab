@@ -25,7 +25,7 @@
 # After that, just push to git — the gitops-sync timer pulls changes
 # every 5 minutes and applies them automatically.
 #
-# uCore image: ghcr.io/ublue-os/ucore-minimal:stable (ARM)
+# uCore image: ghcr.io/ublue-os/ucore:stable (ARM)
 #   - Docker (moby-engine) + docker-compose
 #   - Tailscale
 #   - Cockpit (web management)
@@ -54,20 +54,9 @@ passwd:
 ########################################
 storage:
   directories:
-    # Repo root
-    - path: /srv
-      mode: 0755
-      user: { name: mez }
-      group: { name: mez }
-
-    # Monitoring stack directory
-    - path: /srv/docker/powder/monitoring
-      mode: 0755
-      user: { name: mez }
-      group: { name: mez }
-
-    # Infra stack directory (Dockge agent)
-    - path: /srv/docker/powder/infra
+    # Repo root — /srv is a symlink to /var/srv on FCOS
+    # Don't create subdirectories here; git clone provides them
+    - path: /var/srv
       mode: 0755
       user: { name: mez }
       group: { name: mez }
@@ -178,7 +167,7 @@ storage:
           echo ""
           echo "  uCore — $(rpm-ostree status --booted | grep -oP 'Version: \K\S+' || echo 'unknown')"
           echo "  Host: powder (Ampere A1 / Oracle Cloud)"
-          echo "  Tailscale: $(tailscale status --self 2>/dev/null | awk '{print $1}' || echo 'not connected')"
+          echo "  Tailscale: $(tailscale status --self --peers=false 2>/dev/null | awk '{print $1}' || echo 'not connected')"
           echo "  Cockpit:   https://localhost:9090"
           echo "  Stacks:    /srv/docker/powder/{infra,monitoring}"
           echo "  Commands:  make -C /srv/docker/powder help"
@@ -215,7 +204,7 @@ systemd:
         [Service]
         Type=oneshot
         StandardOutput=journal+console
-        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal:stable
+        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-unverified-registry:ghcr.io/ublue-os/ucore:stable
         ExecStart=/usr/bin/touch /etc/ucore-autorebase/unverified
         ExecStart=/usr/bin/systemctl disable ucore-unsigned-autorebase.service
         ExecStart=/usr/bin/systemctl reboot
@@ -236,7 +225,7 @@ systemd:
         [Service]
         Type=oneshot
         StandardOutput=journal+console
-        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-image-signed:docker://ghcr.io/ublue-os/ucore-minimal:stable
+        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-image-signed:docker://ghcr.io/ublue-os/ucore:stable
         ExecStart=/usr/bin/touch /etc/ucore-autorebase/signed
         ExecStart=/usr/bin/systemctl disable ucore-signed-autorebase.service
         ExecStart=/usr/bin/systemctl reboot

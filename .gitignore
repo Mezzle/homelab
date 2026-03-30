@@ -23,3 +23,4 @@ coreos/*.ign
 # OS junk
 .DS_Store
 Thumbs.db
+fedora-coreos-43.20260301.3.1-oraclecloud.aarch64.qcow2

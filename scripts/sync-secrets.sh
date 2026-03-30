@@ -106,9 +106,10 @@ sync_stack() {
     local key="${line%%=*}"
     [[ -z "$key" ]] && continue
 
-    # Try to read from 1Password
+    # Try to read from 1Password (item names use . instead of / as separator)
+    local item_name="${stack_name//\//.}"
     local value
-    value=$(op read "op://$VAULT/$stack_name/$key" 2>/dev/null || echo "")
+    value=$(op read "op://$VAULT/$item_name/$key" 2>/dev/null || echo "")
 
     if [[ -n "$value" ]]; then
       set_env_value "$env_file" "$key" "$value"
