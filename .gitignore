@@ -1,0 +1,25 @@
+# Secrets
+**/.env
+
+# Application data
+**/appdata/
+
+# Tailscale node state (contains private keys)
+**/config/tailscale/*/state/
+
+# SSH keys
+**/config/seedbox/id_rsa
+**/config/seedbox/id_ed25519
+
+# Gluetun state
+**/config/gluetun/
+
+# Mosquitto passwords (generated, contains hashes)
+**/config/mosquitto/password_file
+
+# Ignition files (generated from .bu)
+coreos/*.ign
+
+# OS junk
+.DS_Store
+Thumbs.db

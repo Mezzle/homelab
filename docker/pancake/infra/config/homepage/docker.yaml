@@ -1,0 +1,3 @@
+# Docker socket integration — auto-discovers containers on pancake
+pancake:
+  socket: /var/run/docker.sock

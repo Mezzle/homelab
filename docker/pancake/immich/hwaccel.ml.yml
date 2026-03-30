@@ -1,0 +1,38 @@
+# Hardware-accelerated ML backends for Immich
+# See https://immich.app/docs/features/ml-hardware-acceleration
+#
+# Select backend in docker-compose.yml via:
+#   extends:
+#     file: hwaccel.ml.yml
+#     service: cuda   # or openvino, armnn, cpu
+#
+# Remember to also change the image tag suffix to match:
+#   image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}-cuda
+
+services:
+  cpu: {}
+
+  cuda:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+
+  openvino:
+    device_cgroup_rules:
+      - 'c 189:* rmw'
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+
+  armnn:
+    devices:
+      - /dev/mali0:/dev/mali0
+    volumes:
+      - /lib/firmware/mali_csffw.bin:/lib/firmware/mali_csffw.bin:ro
+      - /usr/lib/libmali.so:/usr/lib/libmali.so:ro

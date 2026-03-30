@@ -1,0 +1,30 @@
+# Hardware-accelerated transcoding backends for Immich
+# See https://immich.app/docs/features/hardware-transcoding
+#
+# Select backend in docker-compose.yml via:
+#   extends:
+#     file: hwaccel.transcoding.yml
+#     service: nvenc   # or quicksync, vaapi, cpu
+
+services:
+  cpu: {}
+
+  nvenc:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - compute
+                - graphics
+                - video
+
+  quicksync:
+    devices:
+      - /dev/dri:/dev/dri
+
+  vaapi:
+    devices:
+      - /dev/dri:/dev/dri

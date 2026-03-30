@@ -1,0 +1,109 @@
+##############################################################################
+# Infrastructure stack — Dockge agent
+#
+# Runs Dockge in agent mode so the primary Dockge instance on pancake
+# can manage this server's stacks from a single UI.
+#
+# Required:
+#   - Copy .env.example to .env and fill in your values
+##############################################################################
+
+x-common-env: &common-env
+  TZ: Europe/London
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 15s
+
+x-tailscale-env: &tailscale-env
+  TS_AUTHKEY: ${TS_AUTHKEY}
+  TS_STATE_DIR: /var/lib/tailscale
+  TS_USERSPACE: "false"
+  TS_ENABLE_HEALTH_CHECK: "true"
+
+x-tailscale-sidecar: &tailscale-sidecar
+  image: tailscale/tailscale:latest
+  restart: unless-stopped
+  networks:
+    - infra
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+  devices:
+    - /dev/net/tun
+  deploy:
+    resources:
+      limits:
+        memory: 128M
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /run
+  healthcheck:
+    <<: *healthcheck-defaults
+    test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+  logging: *default-logging
+
+networks:
+  infra:
+    driver: bridge
+
+services:
+  ##########################################################################
+  # Dockge — agent mode
+  #
+  # Connect this agent from the primary Dockge UI on pancake:
+  #   https://dockge.<tailnet>.ts.net → Settings → Agents → Add
+  #   URL: ws://dockge-charm.<tailnet>.ts.net/terminal-socket
+  ##########################################################################
+  dockge:
+    image: louislam/dockge:latest
+    container_name: dockge
+    restart: unless-stopped
+    networks:
+      - infra
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    ports:
+      - 5001:5001
+    environment:
+      <<: *common-env
+      DOCKGE_STACKS_DIR: /stacks
+    volumes:
+      - ./appdata/dockge:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /srv/docker:/stacks:ro
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5001"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Tailscale sidecar — Dockge UI
+  ##########################################################################
+  ts-dockge:
+    <<: *tailscale-sidecar
+    container_name: ts-dockge-charm
+    hostname: ts-dockge-charm
+    depends_on:
+      dockge:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: dockge-charm
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/dockge/state:/var/lib/tailscale
+      - ./config/tailscale/dockge/serve.json:/config/serve.json:ro

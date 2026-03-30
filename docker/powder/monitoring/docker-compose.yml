@@ -1,0 +1,169 @@
+##############################################################################
+# Monitoring stack — External monitoring (Oracle Cloud)
+#
+# Runs outside the homelab so it can monitor and alert even when home
+# machines are down. Connected via Tailscale mesh.
+#
+# Services:
+#   - Uptime Kuma: monitors all homelab services over Tailscale
+#   - Alertmanager: receives alerts from Prometheus (on pancake) over
+#     Tailscale, routes to Discord. Survives pancake going down.
+#
+# Required:
+#   - Copy .env.example to .env and fill in your values
+##############################################################################
+
+x-common-env: &common-env
+  TZ: Europe/London
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 15s
+
+x-tailscale-env: &tailscale-env
+  TS_AUTHKEY: ${TS_AUTHKEY}
+  TS_STATE_DIR: /var/lib/tailscale
+  TS_USERSPACE: "false"
+  TS_ENABLE_HEALTH_CHECK: "true"
+
+x-tailscale-sidecar: &tailscale-sidecar
+  image: tailscale/tailscale:latest
+  restart: unless-stopped
+  networks:
+    - monitoring
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+  devices:
+    - /dev/net/tun
+  deploy:
+    resources:
+      limits:
+        memory: 128M
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /run
+  healthcheck:
+    <<: *healthcheck-defaults
+    test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+  logging: *default-logging
+
+networks:
+  monitoring:
+    driver: bridge
+
+services:
+  ##########################################################################
+  # Uptime Kuma — external service monitoring
+  #
+  # Monitors all homelab services over Tailscale. Because it runs in the
+  # cloud, it detects home internet/power outages that internal monitoring
+  # would miss.
+  ##########################################################################
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma
+    restart: unless-stopped
+    networks:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    ports:
+      - 3001:3001
+    volumes:
+      - ./appdata/uptime-kuma:/app/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-f", "http://localhost:3001/"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Alertmanager — receives alerts from Prometheus over Tailscale
+  #
+  # Prometheus (on pancake) sends alerts here. Because Alertmanager runs
+  # externally, in-flight alerts still fire even if pancake dies right
+  # after sending them.
+  #
+  # Prometheus config (on pancake) should point to:
+  #   alertmanagers:
+  #     - static_configs:
+  #         - targets: ['powder:9093']
+  ##########################################################################
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    ports:
+      - 9093:9093
+    environment:
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        sed "s|DISCORD_WEBHOOK_PLACEHOLDER|$${DISCORD_WEBHOOK_URL}/slack|g" \
+          /etc/alertmanager/alertmanager.yml.tmpl > /tmp/alertmanager.yml
+        exec /bin/alertmanager \
+          --config.file=/tmp/alertmanager.yml \
+          --storage.path=/alertmanager \
+          --cluster.listen-address=""
+    volumes:
+      - ./config/alertmanager/alertmanager.yml.tmpl:/etc/alertmanager/alertmanager.yml.tmpl:ro
+      - ./appdata/alertmanager:/alertmanager
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Tailscale sidecars
+  ##########################################################################
+  ts-uptime-kuma:
+    <<: *tailscale-sidecar
+    container_name: ts-uptime-kuma
+    hostname: ts-uptime-kuma
+    depends_on:
+      uptime-kuma:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: uptime-kuma
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/uptime-kuma/state:/var/lib/tailscale
+      - ./config/tailscale/uptime-kuma/serve.json:/config/serve.json:ro
+
+  ts-alertmanager:
+    <<: *tailscale-sidecar
+    container_name: ts-alertmanager
+    hostname: ts-alertmanager
+    depends_on:
+      alertmanager:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: alertmanager
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/alertmanager/state:/var/lib/tailscale
+      - ./config/tailscale/alertmanager/serve.json:/config/serve.json:ro

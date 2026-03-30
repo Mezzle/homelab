@@ -1,0 +1,618 @@
+###############################################################################
+# pancake.bu — Fedora CoreOS Butane config for the media server (laptop)
+#
+# Hardware: Intel i7-5700HQ (4c/8t), 16GB RAM, 240GB SSD, 1TB HDD,
+#           NVIDIA GTX 970M
+#
+# Transpile to Ignition before use:
+#   butane --pretty --strict pancake.bu > pancake.ign
+#
+# Then either:
+#   - Provide pancake.ign at install time:
+#       coreos-installer install /dev/sda --ignition-file pancake.ign
+#   - Or serve it over HTTP for PXE/iPXE boot
+#
+# After first boot:
+#   1. SSH in:  ssh mez@<ip>
+#   2. Find HDD device ID:
+#        ls -l /dev/disk/by-id/ | grep sdb   # or whatever the HDD is
+#      Then update mnt-storage.mount with the correct by-id path.
+#   3. Format HDD if needed:  sudo mkfs.ext4 /dev/disk/by-id/<YOUR-HDD-ID>
+#   4. Start storage mount:  sudo systemctl start mnt-storage.mount
+#   5. Set up the git repo (one-time):
+#        cd /srv && git clone <your-repo> .
+#        cp .env.example .env && vim .env
+#   6. Start all stacks:  make -C /srv/docker/pancake up-all
+#
+# After that, just push to git — the gitops-sync timer pulls changes
+# every 5 minutes and applies them automatically.
+#
+# First boot: the auto-rebase services switch from stock Fedora CoreOS
+# to uCore (stable-nvidia-lts), which includes Docker, NVIDIA drivers,
+# Tailscale, and cockpit out of the box. Two reboots occur automatically
+# (unsigned rebase → signed rebase), then the system is ready.
+#
+# uCore image: ghcr.io/ublue-os/ucore-minimal:stable-nvidia-lts
+#   - Docker (moby-engine) + docker-compose
+#   - NVIDIA open drivers (LTS/580 series — Maxwell/Pascal support)
+#   - nvidia-container-toolkit (CDI)
+#   - Tailscale
+#   - Cockpit (web management)
+#   - Wireguard tools
+###############################################################################
+variant: fcos
+version: "1.7.0"
+
+########################################
+# Users
+########################################
+passwd:
+  groups:
+    - name: docker
+  users:
+    - name: mez
+      # Add your SSH public key(s) here
+      ssh_authorized_keys:
+        - ssh-ed25519 CHANGEME mez@laptop
+      groups:
+        - docker
+        - wheel
+      shell: /bin/bash
+
+########################################
+# Storage — directories and config files
+########################################
+storage:
+  directories:
+    # Repo root (cloned to /srv, docker/ subdir maps to /srv/docker/)
+    - path: /srv
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+    # Stack directories (populated via git clone)
+    - path: /srv/docker/pancake/arr
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+    - path: /srv/docker/pancake/immich
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+    - path: /srv/docker/pancake/music
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+    - path: /srv/docker/pancake/infra
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+    - path: /srv/docker/pancake/observability
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+    # HDD storage directories (created after mount)
+    # uCore auto-rebase tracking
+    - path: /etc/ucore-autorebase
+      mode: 0754
+
+    - path: /mnt/storage
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+    - path: /mnt/storage/media
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+    - path: /mnt/storage/photos
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+    - path: /mnt/storage/cache
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+  files:
+    ##################################################################
+    # Zincati — automatic OS update strategy
+    # Reboots only on Sundays between 04:00-05:00 UTC
+    # NOTE: Zincati may be inactive after uCore rebase. If so, use
+    # rpm-ostree upgrade via a systemd timer instead.
+    ##################################################################
+    - path: /etc/zincati/config.d/55-updates-strategy.toml
+      mode: 0644
+      contents:
+        inline: |
+          [updates]
+          strategy = "periodic"
+          [[updates.periodic.window]]
+          days = [ "Sun" ]
+          start_time = "04:00"
+          length_minutes = 60
+
+    ##################################################################
+    # Sysctl tuning
+    ##################################################################
+    - path: /etc/sysctl.d/90-pancake-tuning.conf
+      mode: 0644
+      contents:
+        inline: |
+          # inotify limits — arr apps and Immich watch many files
+          fs.inotify.max_user_watches=524288
+          fs.inotify.max_user_instances=512
+
+          # Network tuning for media streaming
+          net.core.rmem_max=4194304
+          net.core.wmem_max=4194304
+
+          # Immich / Elasticsearch requirement
+          vm.max_map_count=262144
+
+    ##################################################################
+    # Kernel modules — loaded at boot
+    ##################################################################
+    - path: /etc/modules-load.d/pancake.conf
+      mode: 0644
+      contents:
+        inline: |
+          fuse
+          tun
+
+    ##################################################################
+    # Docker daemon config
+    # NVIDIA GPU access is handled via CDI (Container Device Interface)
+    # by the uCore nvidia-container-toolkit — no runtime config needed.
+    ##################################################################
+    - path: /etc/docker/daemon.json
+      mode: 0644
+      contents:
+        inline: |
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "10m",
+              "max-file": "3"
+            },
+            "storage-driver": "overlay2",
+            "live-restore": true,
+            "default-address-pools": [
+              {"base": "172.20.0.0/14", "size": 24}
+            ]
+          }
+
+    ##################################################################
+    # Passwordless sudo for wheel group
+    ##################################################################
+    - path: /etc/sudoers.d/wheel-nopasswd
+      mode: 0440
+      contents:
+        inline: |
+          %wheel ALL=(ALL) NOPASSWD: ALL
+
+    ##################################################################
+    # SSH hardening
+    ##################################################################
+    - path: /etc/ssh/sshd_config.d/50-hardening.conf
+      mode: 0600
+      contents:
+        inline: |
+          PasswordAuthentication no
+          PermitRootLogin no
+          MaxAuthTries 3
+          ClientAliveInterval 300
+          ClientAliveCountMax 2
+
+    ##################################################################
+    # Tailscale auth key — used by tailscale-auth.service on first boot
+    # Replace with a reusable + ephemeral key from:
+    #   https://login.tailscale.com/admin/settings/keys
+    ##################################################################
+    - path: /etc/tailscale-authkey
+      mode: 0600
+      contents:
+        inline: |
+          tskey-auth-CHANGEME
+
+    ##################################################################
+    # MOTD — show useful info on login
+    ##################################################################
+    - path: /etc/profile.d/motd.sh
+      mode: 0755
+      contents:
+        inline: |
+          #!/bin/bash
+          echo ""
+          echo "  uCore — $(rpm-ostree status --booted | grep -oP 'Version: \K\S+' || echo 'unknown')"
+          echo "  Host: pancake (i7-5700HQ / 16GB / GTX 970M)"
+          echo "  Tailscale: $(tailscale status --self 2>/dev/null | awk '{print $1}' || echo 'not connected')"
+          echo "  Cockpit:   https://localhost:9090"
+          echo "  Stacks:    /srv/docker/pancake/{arr,immich,music,infra,observability}"
+          echo "  Commands:  make -C /srv/docker/pancake help"
+          echo ""
+          docker ps --format "  {{.Names}}\t{{.Status}}" 2>/dev/null | sort | head -20
+          TOTAL=$(docker ps -q 2>/dev/null | wc -l)
+          [ "$TOTAL" -gt 20 ] && echo "  ... and $((TOTAL - 20)) more"
+          echo ""
+
+########################################
+# Systemd units
+########################################
+systemd:
+  units:
+    ##################################################################
+    # Enable Docker
+    ##################################################################
+    - name: docker.service
+      enabled: true
+
+    ##################################################################
+    # HDD storage mount — /mnt/storage
+    #
+    # IMPORTANT: Replace the device path below with the actual
+    # /dev/disk/by-id/ path for your 1TB HDD. Find it with:
+    #   ls -l /dev/disk/by-id/ | grep -v part
+    ##################################################################
+    - name: mnt-storage.mount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Mount 1TB HDD at /mnt/storage
+        Before=local-fs.target
+
+        [Mount]
+        What=/dev/disk/by-id/CHANGEME-1TB-HDD-ID
+        Where=/mnt/storage
+        Type=ext4
+        Options=defaults,noatime
+
+        [Install]
+        WantedBy=local-fs.target
+
+    - name: mnt-storage-permissions.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Set ownership on /mnt/storage after mount
+        After=mnt-storage.mount
+        Requires=mnt-storage.mount
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStart=/usr/bin/chown -R mez:mez /mnt/storage
+
+        [Install]
+        WantedBy=local-fs.target
+
+    ##################################################################
+    # uCore auto-rebase — switch from stock CoreOS to uCore
+    #
+    # Two-stage process on first boot:
+    #   1. Rebase to unsigned uCore image → reboot
+    #   2. Rebase to signed uCore image → reboot
+    # After both reboots, Docker + NVIDIA + Tailscale are available.
+    #
+    # GTX 970M is Maxwell — requires nvidia-lts (580 series) drivers.
+    ##################################################################
+    - name: ucore-unsigned-autorebase.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=uCore autorebase to unsigned OCI and reboot
+        ConditionPathExists=!/etc/ucore-autorebase/unverified
+        ConditionPathExists=!/etc/ucore-autorebase/signed
+        After=network-online.target
+        Wants=network-online.target
+
+        [Service]
+        Type=oneshot
+        StandardOutput=journal+console
+        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal:stable-nvidia-lts
+        ExecStart=/usr/bin/touch /etc/ucore-autorebase/unverified
+        ExecStart=/usr/bin/systemctl disable ucore-unsigned-autorebase.service
+        ExecStart=/usr/bin/systemctl reboot
+
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: ucore-signed-autorebase.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=uCore autorebase to signed OCI and reboot
+        ConditionPathExists=/etc/ucore-autorebase/unverified
+        ConditionPathExists=!/etc/ucore-autorebase/signed
+        After=network-online.target
+        Wants=network-online.target
+
+        [Service]
+        Type=oneshot
+        StandardOutput=journal+console
+        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-image-signed:docker://ghcr.io/ublue-os/ucore-minimal:stable-nvidia-lts
+        ExecStart=/usr/bin/touch /etc/ucore-autorebase/signed
+        ExecStart=/usr/bin/systemctl disable ucore-signed-autorebase.service
+        ExecStart=/usr/bin/systemctl reboot
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # Tailscale — host-level tailnet connectivity
+    #
+    # Provides: SSH via tailnet hostname, DNS resolution, machine identity.
+    # Per-service HTTPS is still handled by sidecar containers.
+    ##################################################################
+    - name: tailscaled.service
+      enabled: true
+
+    - name: tailscale-auth.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Authenticate Tailscale on first boot
+        After=tailscaled.service network-online.target
+        Requires=tailscaled.service
+        ConditionPathExists=/etc/tailscale-authkey
+        ConditionPathExists=!/var/lib/tailscale-auth-done
+
+        [Service]
+        Type=oneshot
+        ExecStart=/bin/bash -c '\
+          tailscale up \
+            --authkey=$(cat /etc/tailscale-authkey | tr -d "[:space:]") \
+            --hostname=pancake \
+            --ssh && \
+          touch /var/lib/tailscale-auth-done && \
+          rm -f /etc/tailscale-authkey'
+        TimeoutStartSec=60
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # Cockpit — web-based system management (socket-activated)
+    # Access via https://pancake:9090 or Tailscale
+    ##################################################################
+    - name: cockpit.socket
+      enabled: true
+
+    ##################################################################
+    # arr stack — auto-start on boot
+    ##################################################################
+    - name: arr-stack.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=arr media stack (docker compose)
+        After=docker.service network-online.target mnt-storage.mount
+        Requires=docker.service mnt-storage.mount
+        ConditionPathExists=/srv/docker/pancake/arr/docker-compose.yml
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        WorkingDirectory=/srv/docker/pancake/arr
+        ExecStartPre=/usr/bin/docker compose pull --quiet
+        ExecStart=/usr/bin/docker compose up -d --remove-orphans
+        ExecStop=/usr/bin/docker compose down
+        TimeoutStartSec=300
+        User=mez
+        Group=mez
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # immich stack — auto-start on boot
+    ##################################################################
+    - name: immich-stack.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Immich photo management stack (docker compose)
+        After=docker.service network-online.target mnt-storage.mount
+        Requires=docker.service mnt-storage.mount
+        ConditionPathExists=/srv/docker/pancake/immich/docker-compose.yml
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        WorkingDirectory=/srv/docker/pancake/immich
+        ExecStartPre=/usr/bin/docker compose pull --quiet
+        ExecStart=/usr/bin/docker compose up -d --remove-orphans
+        ExecStop=/usr/bin/docker compose down
+        TimeoutStartSec=300
+        User=mez
+        Group=mez
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # music stack — auto-start on boot
+    ##################################################################
+    - name: music-stack.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Music stack (docker compose)
+        After=docker.service network-online.target mnt-storage.mount
+        Requires=docker.service mnt-storage.mount
+        ConditionPathExists=/srv/docker/pancake/music/docker-compose.yml
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        WorkingDirectory=/srv/docker/pancake/music
+        ExecStartPre=/usr/bin/docker compose pull --quiet
+        ExecStart=/usr/bin/docker compose up -d --remove-orphans
+        ExecStop=/usr/bin/docker compose down
+        TimeoutStartSec=300
+        User=mez
+        Group=mez
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # infra stack — auto-start on boot
+    ##################################################################
+    - name: infra-stack.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Infrastructure stack (docker compose)
+        After=docker.service network-online.target mnt-storage.mount
+        Requires=docker.service mnt-storage.mount
+        ConditionPathExists=/srv/docker/pancake/infra/docker-compose.yml
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        WorkingDirectory=/srv/docker/pancake/infra
+        ExecStartPre=/usr/bin/docker compose pull --quiet
+        ExecStart=/usr/bin/docker compose up -d --remove-orphans
+        ExecStop=/usr/bin/docker compose down
+        TimeoutStartSec=300
+        User=mez
+        Group=mez
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # observability stack — auto-start on boot
+    ##################################################################
+    - name: observability-stack.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Observability stack (docker compose)
+        After=docker.service network-online.target
+        Requires=docker.service
+        ConditionPathExists=/srv/docker/pancake/observability/docker-compose.yml
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        WorkingDirectory=/srv/docker/pancake/observability
+        ExecStartPre=/usr/bin/docker compose pull --quiet
+        ExecStart=/usr/bin/docker compose up -d --remove-orphans
+        ExecStop=/usr/bin/docker compose down
+        TimeoutStartSec=300
+        User=mez
+        Group=mez
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # Weekly container image cleanup
+    ##################################################################
+    - name: docker-prune.service
+      enabled: false
+      contents: |
+        [Unit]
+        Description=Prune unused Docker images and build cache
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/bin/docker system prune -af --filter "until=168h"
+
+    - name: docker-prune.timer
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Run Docker prune weekly
+
+        [Timer]
+        OnCalendar=Sun 05:30
+        Persistent=true
+        RandomizedDelaySec=600
+
+        [Install]
+        WantedBy=timers.target
+
+    ##################################################################
+    # GitOps sync — pull from git and apply changes automatically
+    #
+    # Runs every 5 minutes. If docker-compose.yml/config changes,
+    # runs `docker compose up -d`. If OS config files change in
+    # coreos/os-configs/, copies them into /etc/ and reloads.
+    #
+    # Logs: journalctl -u gitops-sync.service -f
+    ##################################################################
+    - name: gitops-sync.service
+      enabled: false
+      contents: |
+        [Unit]
+        Description=GitOps sync — pull git and apply changes
+        After=docker.service network-online.target
+        Requires=network-online.target
+        ConditionPathExists=/srv/.git
+
+        [Service]
+        Type=oneshot
+        WorkingDirectory=/srv
+        Environment=GITOPS_SERVER_DIR=docker/pancake
+        ExecStart=/srv/scripts/gitops-sync.sh
+        User=mez
+        Group=mez
+        # Allow sudo for OS config file updates
+        SupplementaryGroups=wheel
+
+    - name: gitops-sync.timer
+      enabled: true
+      contents: |
+        [Unit]
+        Description=GitOps sync — poll git every 5 minutes
+
+        [Timer]
+        OnBootSec=2min
+        OnUnitActiveSec=5min
+        RandomizedDelaySec=30
+
+        [Install]
+        WantedBy=timers.target
+
+    ##################################################################
+    # Automatic container updates check (logs only, doesn't restart)
+    # Pairs with Diun if you add it later
+    ##################################################################
+    - name: docker-update-check.service
+      enabled: false
+      contents: |
+        [Unit]
+        Description=Check for Docker image updates
+
+        [Service]
+        Type=oneshot
+        ExecStart=/bin/bash -c '\
+          for d in /srv/docker/pancake/arr /srv/docker/pancake/immich /srv/docker/pancake/music /srv/docker/pancake/infra /srv/docker/pancake/observability; do \
+            [ -f "$$d/docker-compose.yml" ] && \
+            echo "=== $$(basename $$d) ===" && \
+            /usr/bin/docker compose -f $$d/docker-compose.yml pull --dry-run 2>&1 | grep -v "up to date"; \
+          done; true'
+
+    - name: docker-update-check.timer
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Check for Docker image updates daily
+
+        [Timer]
+        OnCalendar=daily
+        Persistent=true
+        RandomizedDelaySec=3600
+
+        [Install]
+        WantedBy=timers.target

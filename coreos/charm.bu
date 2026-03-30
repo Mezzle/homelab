@@ -1,0 +1,468 @@
+###############################################################################
+# charm.bu — Fedora CoreOS Butane config for the home server (Mac Mini)
+#
+# Hardware: Intel i5-4260U (2c/4t), 4GB RAM, 480GB SSD, Intel HD 5000
+#
+# Transpile to Ignition before use:
+#   butane --pretty --strict charm.bu > charm.ign
+#
+# Then either:
+#   - Provide charm.ign at install time:
+#       coreos-installer install /dev/sda --ignition-file charm.ign
+#   - Or serve it over HTTP for PXE/iPXE boot
+#
+# After first boot:
+#   1. Wait for uCore auto-rebase (~2 reboots, ~5-10 min total)
+#   2. SSH in:  ssh mez@charm  (via Tailscale)
+#   3. Set up the git repo (one-time):
+#        cd /srv && git clone <your-repo> .
+#   4. Start stacks:  make -C /srv/docker/charm up-all
+#
+# After that, just push to git — the gitops-sync timer pulls changes
+# every 5 minutes and applies them automatically.
+#
+# uCore image: ghcr.io/ublue-os/ucore-minimal:stable
+#   - Docker (moby-engine) + docker-compose
+#   - Tailscale
+#   - Cockpit (web management)
+#   - Wireguard tools
+###############################################################################
+variant: fcos
+version: "1.7.0"
+
+########################################
+# Users
+########################################
+passwd:
+  groups:
+    - name: docker
+  users:
+    - name: mez
+      # Add your SSH public key(s) here
+      ssh_authorized_keys:
+        - ssh-ed25519 CHANGEME mez@laptop
+      groups:
+        - docker
+        - wheel
+      shell: /bin/bash
+
+########################################
+# Storage — directories and config files
+########################################
+storage:
+  directories:
+    # Repo root (cloned to /srv, docker/ subdir maps to /srv/docker/)
+    - path: /srv
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+    # Home stack directory
+    - path: /srv/docker/charm/home
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+    # Infra stack directory (Dockge agent)
+    - path: /srv/docker/charm/infra
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+    # uCore auto-rebase tracking
+    - path: /etc/ucore-autorebase
+      mode: 0754
+
+    # Monitoring stack directory
+    - path: /srv/docker/charm/monitoring
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
+  files:
+    ##################################################################
+    # Zincati — automatic OS update strategy
+    # Reboots only on Sundays between 04:00-05:00 UTC
+    # NOTE: Zincati may be inactive after uCore rebase. If so, use
+    # rpm-ostree upgrade via a systemd timer instead.
+    ##################################################################
+    - path: /etc/zincati/config.d/55-updates-strategy.toml
+      mode: 0644
+      contents:
+        inline: |
+          [updates]
+          strategy = "periodic"
+          [[updates.periodic.window]]
+          days = [ "Sun" ]
+          start_time = "04:00"
+          length_minutes = 60
+
+    ##################################################################
+    # Sysctl tuning
+    ##################################################################
+    - path: /etc/sysctl.d/90-home-tuning.conf
+      mode: 0644
+      contents:
+        inline: |
+          # inotify limits — containers and services watch many files
+          fs.inotify.max_user_watches=524288
+          fs.inotify.max_user_instances=512
+
+          # Network buffer tuning
+          net.core.rmem_max=4194304
+          net.core.wmem_max=4194304
+
+    ##################################################################
+    # Kernel modules — loaded at boot
+    ##################################################################
+    - path: /etc/modules-load.d/home.conf
+      mode: 0644
+      contents:
+        inline: |
+          tun
+
+    ##################################################################
+    # Docker daemon config
+    ##################################################################
+    - path: /etc/docker/daemon.json
+      mode: 0644
+      contents:
+        inline: |
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "10m",
+              "max-file": "3"
+            },
+            "storage-driver": "overlay2",
+            "live-restore": true,
+            "default-address-pools": [
+              {"base": "172.20.0.0/14", "size": 24}
+            ]
+          }
+
+    ##################################################################
+    # Passwordless sudo for wheel group
+    ##################################################################
+    - path: /etc/sudoers.d/wheel-nopasswd
+      mode: 0440
+      contents:
+        inline: |
+          %wheel ALL=(ALL) NOPASSWD: ALL
+
+    ##################################################################
+    # SSH hardening
+    ##################################################################
+    - path: /etc/ssh/sshd_config.d/50-hardening.conf
+      mode: 0600
+      contents:
+        inline: |
+          PasswordAuthentication no
+          PermitRootLogin no
+          MaxAuthTries 3
+          ClientAliveInterval 300
+          ClientAliveCountMax 2
+
+    ##################################################################
+    # Tailscale auth key — used by tailscale-auth.service on first boot
+    ##################################################################
+    - path: /etc/tailscale-authkey
+      mode: 0600
+      contents:
+        inline: |
+          tskey-auth-CHANGEME
+
+    ##################################################################
+    # MOTD — show useful info on login
+    ##################################################################
+    - path: /etc/profile.d/motd.sh
+      mode: 0755
+      contents:
+        inline: |
+          #!/bin/bash
+          echo ""
+          echo "  uCore — $(rpm-ostree status --booted | grep -oP 'Version: \K\S+' || echo 'unknown')"
+          echo "  Host: charm (i5-4260U / 4GB)"
+          echo "  Tailscale: $(tailscale status --self 2>/dev/null | awk '{print $1}' || echo 'not connected')"
+          echo "  Cockpit:   https://localhost:9090"
+          echo "  Stacks:    /srv/docker/charm/{infra,home,monitoring}"
+          echo "  Commands:  make -C /srv/docker/charm help"
+          echo ""
+          docker ps --format "  {{.Names}}\t{{.Status}}" 2>/dev/null | sort | head -20
+          TOTAL=$(docker ps -q 2>/dev/null | wc -l)
+          [ "$TOTAL" -gt 20 ] && echo "  ... and $((TOTAL - 20)) more"
+          echo ""
+
+########################################
+# Systemd units
+########################################
+systemd:
+  units:
+    ##################################################################
+    # Enable Docker
+    ##################################################################
+    - name: docker.service
+      enabled: true
+
+    ##################################################################
+    # uCore auto-rebase — switch from stock CoreOS to uCore
+    #
+    # Two-stage process on first boot:
+    #   1. Rebase to unsigned uCore image → reboot
+    #   2. Rebase to signed uCore image → reboot
+    # After both reboots, Docker + Tailscale are available.
+    ##################################################################
+    - name: ucore-unsigned-autorebase.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=uCore autorebase to unsigned OCI and reboot
+        ConditionPathExists=!/etc/ucore-autorebase/unverified
+        ConditionPathExists=!/etc/ucore-autorebase/signed
+        After=network-online.target
+        Wants=network-online.target
+
+        [Service]
+        Type=oneshot
+        StandardOutput=journal+console
+        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal:stable
+        ExecStart=/usr/bin/touch /etc/ucore-autorebase/unverified
+        ExecStart=/usr/bin/systemctl disable ucore-unsigned-autorebase.service
+        ExecStart=/usr/bin/systemctl reboot
+
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: ucore-signed-autorebase.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=uCore autorebase to signed OCI and reboot
+        ConditionPathExists=/etc/ucore-autorebase/unverified
+        ConditionPathExists=!/etc/ucore-autorebase/signed
+        After=network-online.target
+        Wants=network-online.target
+
+        [Service]
+        Type=oneshot
+        StandardOutput=journal+console
+        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-image-signed:docker://ghcr.io/ublue-os/ucore-minimal:stable
+        ExecStart=/usr/bin/touch /etc/ucore-autorebase/signed
+        ExecStart=/usr/bin/systemctl disable ucore-signed-autorebase.service
+        ExecStart=/usr/bin/systemctl reboot
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # Tailscale — host-level tailnet connectivity
+    ##################################################################
+    - name: tailscaled.service
+      enabled: true
+
+    - name: tailscale-auth.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Authenticate Tailscale on first boot
+        After=tailscaled.service network-online.target
+        Requires=tailscaled.service
+        ConditionPathExists=/etc/tailscale-authkey
+        ConditionPathExists=!/var/lib/tailscale-auth-done
+
+        [Service]
+        Type=oneshot
+        ExecStart=/bin/bash -c '\
+          tailscale up \
+            --authkey=$(cat /etc/tailscale-authkey | tr -d "[:space:]") \
+            --hostname=charm \
+            --ssh && \
+          touch /var/lib/tailscale-auth-done && \
+          rm -f /etc/tailscale-authkey'
+        TimeoutStartSec=60
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # Cockpit — web-based system management (socket-activated)
+    ##################################################################
+    - name: cockpit.socket
+      enabled: true
+
+    ##################################################################
+    # Infra stack (Dockge agent) — auto-start on boot
+    ##################################################################
+    - name: infra-stack.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Infra stack (docker compose)
+        After=docker.service network-online.target
+        Requires=docker.service
+        ConditionPathExists=/srv/docker/charm/infra/docker-compose.yml
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        WorkingDirectory=/srv/docker/charm/infra
+        ExecStartPre=/usr/bin/docker compose pull --quiet
+        ExecStart=/usr/bin/docker compose up -d --remove-orphans
+        ExecStop=/usr/bin/docker compose down
+        TimeoutStartSec=300
+        User=mez
+        Group=mez
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # Home stack — auto-start on boot
+    ##################################################################
+    - name: home-stack.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Home stack (docker compose)
+        After=docker.service network-online.target
+        Requires=docker.service
+        ConditionPathExists=/srv/docker/charm/home/docker-compose.yml
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        WorkingDirectory=/srv/docker/charm/home
+        ExecStartPre=/usr/bin/docker compose pull --quiet
+        ExecStart=/usr/bin/docker compose up -d --remove-orphans
+        ExecStop=/usr/bin/docker compose down
+        TimeoutStartSec=300
+        User=mez
+        Group=mez
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # Monitoring stack — auto-start on boot
+    ##################################################################
+    - name: monitoring-stack.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Monitoring stack (docker compose)
+        After=docker.service network-online.target
+        Requires=docker.service
+        ConditionPathExists=/srv/docker/charm/monitoring/docker-compose.yml
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        WorkingDirectory=/srv/docker/charm/monitoring
+        ExecStartPre=/usr/bin/docker compose pull --quiet
+        ExecStart=/usr/bin/docker compose up -d --remove-orphans
+        ExecStop=/usr/bin/docker compose down
+        TimeoutStartSec=300
+        User=mez
+        Group=mez
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # Weekly container image cleanup
+    ##################################################################
+    - name: docker-prune.service
+      enabled: false
+      contents: |
+        [Unit]
+        Description=Prune unused Docker images and build cache
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/bin/docker system prune -af --filter "until=168h"
+
+    - name: docker-prune.timer
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Run Docker prune weekly
+
+        [Timer]
+        OnCalendar=Sun 05:30
+        Persistent=true
+        RandomizedDelaySec=600
+
+        [Install]
+        WantedBy=timers.target
+
+    ##################################################################
+    # GitOps sync — pull from git and apply changes automatically
+    #
+    # Runs every 5 minutes. If docker-compose.yml/config changes,
+    # runs `docker compose up -d`. If OS config files change in
+    # coreos/os-configs/, copies them into /etc/ and reloads.
+    #
+    # Logs: journalctl -u gitops-sync.service -f
+    ##################################################################
+    - name: gitops-sync.service
+      enabled: false
+      contents: |
+        [Unit]
+        Description=GitOps sync — pull git and apply changes
+        After=docker.service network-online.target
+        Requires=network-online.target
+        ConditionPathExists=/srv/.git
+
+        [Service]
+        Type=oneshot
+        WorkingDirectory=/srv
+        Environment=GITOPS_SERVER_DIR=docker/charm
+        ExecStart=/srv/scripts/gitops-sync.sh
+        User=mez
+        Group=mez
+        # Allow sudo for OS config file updates
+        SupplementaryGroups=wheel
+
+    - name: gitops-sync.timer
+      enabled: true
+      contents: |
+        [Unit]
+        Description=GitOps sync — poll git every 5 minutes
+
+        [Timer]
+        OnBootSec=2min
+        OnUnitActiveSec=5min
+        RandomizedDelaySec=30
+
+        [Install]
+        WantedBy=timers.target
+
+    ##################################################################
+    # Automatic container updates check (logs only, doesn't restart)
+    # Pairs with Diun if you add it later
+    ##################################################################
+    - name: docker-update-check.service
+      enabled: false
+      contents: |
+        [Unit]
+        Description=Check for Docker image updates
+
+        [Service]
+        Type=oneshot
+        WorkingDirectory=/srv
+        ExecStart=/bin/bash -c 'for d in docker/charm/infra docker/charm/home docker/charm/monitoring; do echo "=== $d ===" && /usr/bin/docker compose -f $d/docker-compose.yml pull --dry-run 2>&1 | grep -v "up to date" || true; done'
+
+    - name: docker-update-check.timer
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Check for Docker image updates daily
+
+        [Timer]
+        OnCalendar=daily
+        Persistent=true
+        RandomizedDelaySec=3600
+
+        [Install]
+        WantedBy=timers.target
+    

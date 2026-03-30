@@ -1,0 +1,584 @@
+##############################################################################
+# arr stack — pancake (laptop)
+#
+# Remote mounts are handled inside Docker (no host-level SSHFS/CIFS).
+# Prowlarr traffic is routed through a PIA VPN via gluetun.
+# All services are exposed on Tailscale with automatic HTTPS.
+# Media stored on local HDD at /mnt/storage/media.
+#
+# Required:
+#   - Copy .env.example to .env and fill in your values
+#   - Place your seedbox SSH key at ./config/seedbox/id_rsa (or adjust path)
+#   - Generate a Tailscale auth key at https://login.tailscale.com/admin/settings/keys
+#     (reusable + ephemeral recommended)
+#   - After first boot, run: make bootstrap
+##############################################################################
+
+##############################################################################
+# YAML anchors — shared config fragments
+##############################################################################
+x-common-env: &common-env
+  PUID: 1001
+  PGID: 1001
+  TZ: Europe/London
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 15s
+
+x-tailscale-env: &tailscale-env
+  TS_AUTHKEY: ${TS_AUTHKEY}
+  TS_STATE_DIR: /var/lib/tailscale
+  TS_USERSPACE: "false"
+  TS_ENABLE_HEALTH_CHECK: "true"
+
+x-tailscale-sidecar: &tailscale-sidecar
+  image: tailscale/tailscale:latest
+  restart: unless-stopped
+  networks:
+    - arr
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+  devices:
+    - /dev/net/tun
+  deploy:
+    resources:
+      limits:
+        memory: 128M
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /run
+  healthcheck:
+    <<: *healthcheck-defaults
+    test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+  logging: *default-logging
+
+x-security-opts: &security-opts
+  security_opt:
+    - no-new-privileges:true
+
+##############################################################################
+# Networks
+##############################################################################
+networks:
+  arr:
+    driver: bridge
+  # Isolated network for Docker socket proxy — only autoheal can reach it
+  socket-proxy:
+    driver: bridge
+    internal: true
+
+##############################################################################
+# Volumes
+##############################################################################
+volumes:
+  nas-media:
+    driver: local
+    driver_opts:
+      type: cifs
+      device: //${NAS_HOST}/${NAS_SHARE}
+      o: "addr=${NAS_HOST},username=${NAS_USER},password=${NAS_PASS},uid=1001,gid=1001,iocharset=utf8,vers=3.0"
+
+  nas-backup:
+    driver: local
+    driver_opts:
+      type: cifs
+      device: //${NAS_HOST}/${NAS_BACKUP_SHARE}
+      o: "addr=${NAS_HOST},username=${NAS_USER},password=${NAS_PASS},uid=1001,gid=1001,iocharset=utf8,vers=3.0"
+
+  seedbox-data:
+
+##############################################################################
+# Services
+##############################################################################
+services:
+  ##########################################################################
+  # Remote mount: Seedbox via SSHFS (rclone)
+  ##########################################################################
+  rclone-seedbox:
+    image: rclone/rclone:latest
+    container_name: rclone-seedbox
+    restart: unless-stopped
+    networks:
+      - arr
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    devices:
+      - /dev/fuse
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+    environment:
+      <<: *common-env
+    volumes:
+      - seedbox-data:/mnt/seedbox:shared
+      - ./config/seedbox:/config/seedbox:ro
+    command: >
+      mount
+        :sftp,host=${SEEDBOX_HOST},user=${SEEDBOX_USER},port=${SEEDBOX_PORT:-22},key_file=/config/seedbox/id_rsa
+        ${SEEDBOX_REMOTE_PATH}
+        /mnt/seedbox
+        --vfs-cache-mode full
+        --vfs-cache-max-size 2G
+        --vfs-read-chunk-size 32M
+        --vfs-read-chunk-size-limit 256M
+        --allow-other
+        --dir-cache-time 5m
+        --poll-interval 30s
+        --transfers 4
+        --log-level INFO
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "ls", "/mnt/seedbox"]
+    logging: *default-logging
+
+  ##########################################################################
+  # VPN: gluetun (PIA) — Prowlarr routes through this
+  ##########################################################################
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    restart: unless-stopped
+    networks:
+      - arr
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    environment:
+      <<: *common-env
+      VPN_SERVICE_PROVIDER: private internet access
+      OPENVPN_USER: ${PIA_USER}
+      OPENVPN_PASSWORD: ${PIA_PASS}
+      SERVER_REGIONS: ${PIA_REGION:-Netherlands}
+      # Uncomment for WireGuard instead of OpenVPN:
+      # VPN_TYPE: wireguard
+    # Port 9696 only exposed locally for debugging — Tailscale handles external access
+    ports:
+      - 127.0.0.1:9696:9696
+    volumes:
+      - ./config/gluetun:/gluetun
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://ifconfig.me"]
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  ##########################################################################
+  # FlareSolverr — Cloudflare challenge bypass for Prowlarr
+  ##########################################################################
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - arr
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    environment:
+      <<: *common-env
+      LOG_LEVEL: info
+      CAPTCHA_SOLVER: none
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-f", "http://localhost:8191"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Prowlarr — network routed through gluetun VPN
+  ##########################################################################
+  prowlarr:
+    image: ghcr.io/hotio/prowlarr:latest
+    container_name: prowlarr
+    restart: unless-stopped
+    <<: *security-opts
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    environment:
+      <<: *common-env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./appdata/prowlarr:/config
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-f", "http://localhost:9696/ping"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Sonarr
+  ##########################################################################
+  sonarr:
+    image: ghcr.io/hotio/sonarr:latest
+    container_name: sonarr
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - arr
+    depends_on:
+      rclone-seedbox:
+        condition: service_healthy
+      prowlarr:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    ports:
+      - 8989:8989
+    environment:
+      <<: *common-env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./appdata/sonarr:/config
+      - nas-media:/data/media
+      - seedbox-data:/data/seedbox:ro
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-f", "http://localhost:8989/ping"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Radarr
+  ##########################################################################
+  radarr:
+    image: ghcr.io/hotio/radarr:latest
+    container_name: radarr
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - arr
+    depends_on:
+      rclone-seedbox:
+        condition: service_healthy
+      prowlarr:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    ports:
+      - 7878:7878
+    environment:
+      <<: *common-env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./appdata/radarr:/config
+      - nas-media:/data/media
+      - seedbox-data:/data/seedbox:ro
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-f", "http://localhost:7878/ping"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Bazarr — automatic subtitle management
+  ##########################################################################
+  bazarr:
+    image: ghcr.io/hotio/bazarr:latest
+    container_name: bazarr
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - arr
+    depends_on:
+      sonarr:
+        condition: service_healthy
+      radarr:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    ports:
+      - 6767:6767
+    environment:
+      <<: *common-env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./appdata/bazarr:/config
+      - nas-media:/data/media
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-f", "http://localhost:6767/ping"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Recyclarr — syncs TRaSH Guides quality profiles on a schedule
+  ##########################################################################
+  recyclarr:
+    image: ghcr.io/recyclarr/recyclarr:latest
+    container_name: recyclarr
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - arr
+    depends_on:
+      sonarr:
+        condition: service_healthy
+      radarr:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    environment:
+      <<: *common-env
+      RECYCLARR_CRON: "0 */6 * * *"
+      SONARR_API_KEY: ${SONARR_API_KEY}
+      RADARR_API_KEY: ${RADARR_API_KEY}
+    volumes:
+      - ./config/recyclarr:/config
+    logging: *default-logging
+
+  ##########################################################################
+  # Docker socket proxy — limits what autoheal can do with the socket
+  ##########################################################################
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: socket-proxy
+    restart: unless-stopped
+    networks:
+      - socket-proxy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    read_only: true
+    tmpfs:
+      - /run
+    environment:
+      # Only grant the minimum permissions autoheal needs
+      CONTAINERS: 1
+      POST: 1
+      # Everything else denied by default
+      IMAGES: 0
+      NETWORKS: 0
+      VOLUMES: 0
+      EXEC: 0
+      SWARM: 0
+      NODES: 0
+      SERVICES: 0
+      TASKS: 0
+      SECRETS: 0
+      CONFIGS: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging: *default-logging
+
+  ##########################################################################
+  # Autoheal — restarts containers that fail healthchecks
+  ##########################################################################
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: autoheal
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - socket-proxy
+    depends_on:
+      - socket-proxy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: all
+      AUTOHEAL_INTERVAL: 60
+      AUTOHEAL_START_PERIOD: 120
+      DOCKER_SOCK: tcp://socket-proxy:2375
+    logging: *default-logging
+
+  ##########################################################################
+  # Backup — scheduled backups of app configs/databases to NAS
+  #
+  # Runs daily at 03:00. Backs up SQLite databases safely and keeps
+  # 7 days of backups. Manual trigger: make backup
+  ##########################################################################
+  backup:
+    image: alpine:3.21
+    container_name: backup
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - arr
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    environment:
+      <<: *common-env
+      BACKUP_RETENTION_DAYS: 7
+      BACKUP_CRON: "0 3 * * *"
+      BACKUP_VERIFY_CRON: "0 12 1 * *"
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+    volumes:
+      - ./appdata:/appdata:ro
+      - ./scripts/backup.sh:/backup.sh:ro
+      - nas-backup:/nas
+    entrypoint: /bin/sh
+    command: >
+      -c "
+        apk add --no-cache sqlite bash curl &&
+        { echo \"$${BACKUP_CRON} /bin/bash /backup.sh\"; echo \"$${BACKUP_VERIFY_CRON} /bin/bash /backup.sh --verify\"; } | crontab - &&
+        crond -f -l 2
+      "
+    logging: *default-logging
+
+  ##########################################################################
+  # Plex
+  ##########################################################################
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    restart: unless-stopped
+    <<: *security-opts
+    network_mode: host
+    # --- GPU hardware transcoding (uncomment ONE section) ---
+    #
+    # NVIDIA (requires nvidia-container-toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    #
+    # Intel Quick Sync (Mac Mini Intel — pass through the render device):
+    # devices:
+    #   - /dev/dri:/dev/dri
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    environment:
+      <<: *common-env
+      VERSION: docker
+      PLEX_CLAIM: ${PLEX_CLAIM:-}
+      # Uncomment for NVIDIA GPU hardware transcoding
+      # NVIDIA_VISIBLE_DEVICES: all
+      # NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+    volumes:
+      - ./appdata/plex:/config
+      - nas-media:/media:ro
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-f", "http://localhost:32400/identity"]
+      start_period: 30s
+    logging: *default-logging
+
+  ##########################################################################
+  # Tailscale sidecars — each service gets its own tailnet hostname
+  # with automatic HTTPS via tailscale serve:
+  #   https://sonarr.<tailnet>.ts.net   → Sonarr
+  #   https://radarr.<tailnet>.ts.net   → Radarr
+  #   https://prowlarr.<tailnet>.ts.net → Prowlarr
+  #   https://bazarr.<tailnet>.ts.net   → Bazarr
+  #   https://plex.<tailnet>.ts.net     → Plex
+  ##########################################################################
+  ts-sonarr:
+    <<: *tailscale-sidecar
+    container_name: ts-sonarr
+    hostname: ts-sonarr
+    depends_on:
+      sonarr:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: sonarr
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/sonarr/state:/var/lib/tailscale
+      - ./config/tailscale/sonarr/serve.json:/config/serve.json:ro
+
+  ts-radarr:
+    <<: *tailscale-sidecar
+    container_name: ts-radarr
+    hostname: ts-radarr
+    depends_on:
+      radarr:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: radarr
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/radarr/state:/var/lib/tailscale
+      - ./config/tailscale/radarr/serve.json:/config/serve.json:ro
+
+  ts-prowlarr:
+    <<: *tailscale-sidecar
+    container_name: ts-prowlarr
+    hostname: ts-prowlarr
+    depends_on:
+      prowlarr:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: prowlarr
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/prowlarr/state:/var/lib/tailscale
+      - ./config/tailscale/prowlarr/serve.json:/config/serve.json:ro
+
+  ts-bazarr:
+    <<: *tailscale-sidecar
+    container_name: ts-bazarr
+    hostname: ts-bazarr
+    depends_on:
+      bazarr:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: bazarr
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/bazarr/state:/var/lib/tailscale
+      - ./config/tailscale/bazarr/serve.json:/config/serve.json:ro
+
+  ts-plex:
+    <<: *tailscale-sidecar
+    container_name: ts-plex
+    hostname: ts-plex
+    depends_on:
+      plex:
+        condition: service_healthy
+    extra_hosts:
+      - "host-gateway:host-gateway"
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: plex
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/plex/state:/var/lib/tailscale
+      - ./config/tailscale/plex/serve.json:/config/serve.json:ro

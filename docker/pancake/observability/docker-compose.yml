@@ -1,0 +1,223 @@
+##############################################################################
+# Observability stack — critical-only alerting, no dashboards
+#
+# Prometheus evaluates alert rules, Alertmanager routes to Discord.
+# node-exporter and cAdvisor provide host + container metrics.
+#
+# Design: fire-and-forget. You should NOT need to look at Prometheus UI
+# unless debugging why an alert fired. No Grafana by design — if you
+# want dashboards later, add grafana/grafana to this stack.
+#
+# Alert philosophy: only "oh shit" and "do this soon" alerts.
+# No package updates, no informational noise.
+#
+# Note: Alertmanager has moved to the powder (cloud) stack so alerts
+# still fire even if pancake goes down. Prometheus sends alerts to
+# powder:9093 over Tailscale, with a local fallback.
+#
+# Required:
+#   - Copy .env.example to .env and add your Discord webhook URL
+##############################################################################
+
+x-common-env: &common-env
+  TZ: Europe/London
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 15s
+
+x-tailscale-env: &tailscale-env
+  TS_AUTHKEY: ${TS_AUTHKEY}
+  TS_STATE_DIR: /var/lib/tailscale
+  TS_USERSPACE: "false"
+  TS_ENABLE_HEALTH_CHECK: "true"
+
+x-tailscale-sidecar: &tailscale-sidecar
+  image: tailscale/tailscale:latest
+  restart: unless-stopped
+  networks:
+    - observability
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+  devices:
+    - /dev/net/tun
+  deploy:
+    resources:
+      limits:
+        memory: 128M
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /run
+  healthcheck:
+    <<: *healthcheck-defaults
+    test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+  logging: *default-logging
+
+networks:
+  observability:
+    driver: bridge
+
+services:
+  ##########################################################################
+  # Prometheus — scrapes metrics and evaluates alert rules
+  #
+  # 15-day retention, ~100MB disk. Only used for alert evaluation,
+  # not long-term storage.
+  ##########################################################################
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - observability
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    ports:
+      - 127.0.0.1:9090:9090
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--storage.tsdb.retention.size=500MB'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./config/prometheus:/etc/prometheus:ro
+      - ./appdata/prometheus:/prometheus
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Alertmanager — routes alerts to Discord
+  #
+  # Critical alerts repeat every 1h, warnings every 24h.
+  # Config is templated at startup to inject the Discord webhook URL.
+  ##########################################################################
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - observability
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    ports:
+      - 127.0.0.1:9093:9093
+    environment:
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        sed "s|DISCORD_WEBHOOK_PLACEHOLDER|$${DISCORD_WEBHOOK_URL}/slack|g" \
+          /etc/alertmanager/alertmanager.yml.tmpl > /tmp/alertmanager.yml
+        exec /bin/alertmanager \
+          --config.file=/tmp/alertmanager.yml \
+          --storage.path=/alertmanager
+    volumes:
+      - ./config/alertmanager/alertmanager.yml.tmpl:/etc/alertmanager/alertmanager.yml.tmpl:ro
+      - ./appdata/alertmanager:/alertmanager
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
+    logging: *default-logging
+
+  ##########################################################################
+  # node-exporter — host metrics (CPU, memory, disk, network)
+  #
+  # Needs host network + PID namespace for accurate readings.
+  ##########################################################################
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    network_mode: host
+    pid: host
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--no-collector.arp'
+      - '--no-collector.infiniband'
+      - '--no-collector.ipvs'
+      - '--no-collector.nfs'
+      - '--no-collector.nfsd'
+      - '--no-collector.zfs'
+    volumes:
+      - /:/host:ro,rslave
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/metrics"]
+    logging: *default-logging
+
+  ##########################################################################
+  # cAdvisor — container-level metrics (CPU, memory, restarts, OOM)
+  ##########################################################################
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.56.2
+    container_name: cadvisor
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - observability
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    ports:
+      - 127.0.0.1:8080:8080
+    command:
+      - '--housekeeping_interval=30s'
+      - '--docker_only=true'
+      - '--disable_metrics=accelerator,cpu_topology,disk,diskIO,memory_numa,network,process,referenced_memory,resctrl,sched,tcp,udp,hugetlb'
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/healthz"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Tailscale sidecar — Prometheus UI for debugging alerts
+  ##########################################################################
+  ts-prometheus:
+    <<: *tailscale-sidecar
+    container_name: ts-prometheus
+    hostname: ts-prometheus
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: prometheus
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/prometheus/state:/var/lib/tailscale
+      - ./config/tailscale/prometheus/serve.json:/config/serve.json:ro

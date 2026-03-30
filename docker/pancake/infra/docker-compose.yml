@@ -1,0 +1,197 @@
+##############################################################################
+# Infrastructure stack — Dockge (compose UI) + Diun (image update notifier)
+#
+# Dockge manages compose stacks via a web UI. It can view and control
+# stacks in /srv/docker/pancake/* but the gitops-sync handles deployments —
+# use Dockge for visibility and ad-hoc management, not as the source
+# of truth.
+#
+# Diun watches all running containers for image updates and notifies
+# via webhook/email/etc.
+#
+# Required:
+#   - Copy .env.example to .env and fill in your values
+##############################################################################
+
+x-common-env: &common-env
+  TZ: Europe/London
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 15s
+
+x-tailscale-env: &tailscale-env
+  TS_AUTHKEY: ${TS_AUTHKEY}
+  TS_STATE_DIR: /var/lib/tailscale
+  TS_USERSPACE: "false"
+  TS_ENABLE_HEALTH_CHECK: "true"
+
+x-tailscale-sidecar: &tailscale-sidecar
+  image: tailscale/tailscale:latest
+  restart: unless-stopped
+  networks:
+    - infra
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+  devices:
+    - /dev/net/tun
+  deploy:
+    resources:
+      limits:
+        memory: 128M
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /run
+  healthcheck:
+    <<: *healthcheck-defaults
+    test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+  logging: *default-logging
+
+networks:
+  infra:
+    driver: bridge
+
+services:
+  ##########################################################################
+  # Dockge — Docker Compose management UI
+  ##########################################################################
+  dockge:
+    image: louislam/dockge:latest
+    container_name: dockge
+    restart: unless-stopped
+    networks:
+      - infra
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    ports:
+      - 5001:5001
+    environment:
+      <<: *common-env
+      DOCKGE_STACKS_DIR: /stacks
+    volumes:
+      - ./appdata/dockge:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Mount the parent stacks directory so Dockge can see all stacks
+      - /srv/docker:/stacks:ro
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5001"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Homepage — dashboard for all homelab services
+  #
+  # Config files in config/homepage/ are committed to git.
+  # API keys and secrets come from HOMEPAGE_VAR_* env vars.
+  ##########################################################################
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    networks:
+      - infra
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    ports:
+      - 3000:3000
+    environment:
+      <<: *common-env
+      # Homepage reads HOMEPAGE_VAR_* from the environment automatically
+      HOMEPAGE_VAR_TAILNET: ${TAILNET}
+      HOMEPAGE_VAR_SONARR_API_KEY: ${SONARR_API_KEY:-}
+      HOMEPAGE_VAR_RADARR_API_KEY: ${RADARR_API_KEY:-}
+      HOMEPAGE_VAR_PROWLARR_API_KEY: ${PROWLARR_API_KEY:-}
+      HOMEPAGE_VAR_PLEX_TOKEN: ${PLEX_TOKEN:-}
+      HOMEPAGE_VAR_IMMICH_API_KEY: ${IMMICH_API_KEY:-}
+      HOMEPAGE_VAR_ADGUARD_USER: ${ADGUARD_USER:-admin}
+      HOMEPAGE_VAR_ADGUARD_PASS: ${ADGUARD_PASS:-}
+    volumes:
+      - ./config/homepage:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Diun — Docker Image Update Notifier
+  #
+  # Configure notifications in config/diun/diun.yml after first boot.
+  # Supports: Discord, Slack, email, Gotify, ntfy, webhooks, etc.
+  ##########################################################################
+  diun:
+    image: crazymax/diun:latest
+    container_name: diun
+    restart: unless-stopped
+    networks:
+      - infra
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    environment:
+      <<: *common-env
+      DIUN_WATCH_SCHEDULE: "0 6 * * *"
+      DIUN_WATCH_JITTER: 30s
+      DIUN_PROVIDERS_DOCKER: "true"
+      DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT: "true"
+    volumes:
+      - ./appdata/diun:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "diun", "--version"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Tailscale sidecars
+  ##########################################################################
+  ts-homepage:
+    <<: *tailscale-sidecar
+    container_name: ts-homepage
+    hostname: ts-homepage
+    depends_on:
+      homepage:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: homepage
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/homepage/state:/var/lib/tailscale
+      - ./config/tailscale/homepage/serve.json:/config/serve.json:ro
+
+  ts-dockge:
+    <<: *tailscale-sidecar
+    container_name: ts-dockge
+    hostname: ts-dockge
+    depends_on:
+      dockge:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: dockge
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/dockge/state:/var/lib/tailscale
+      - ./config/tailscale/dockge/serve.json:/config/serve.json:ro

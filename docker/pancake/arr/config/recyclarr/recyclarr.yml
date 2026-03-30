@@ -1,0 +1,96 @@
+###############################################################################
+# Recyclarr — TRaSH Guides auto-sync configuration
+#
+# This uses the template system — recyclarr pulls the full custom format
+# definitions and scoring from the TRaSH guide automatically. You just pick
+# which profile you want.
+#
+# To change profile: comment out the active `template:` lines and uncomment
+# the alternative you want. Then run: docker exec recyclarr recyclarr sync
+#
+# Available profiles are listed below each section. For the full list:
+# https://recyclarr.dev/wiki/yaml/config-reference/templates/
+###############################################################################
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/recyclarr/recyclarr/master/schemas/config-schema.json
+
+###############################################################################
+# Sonarr
+###############################################################################
+sonarr:
+  series:
+    base_url: http://sonarr:8989
+    api_key: !env_var SONARR_API_KEY
+
+    # Replace existing quality profiles and custom formats (clean sync)
+    replace_existing_custom_formats: true
+    delete_old_custom_formats: true
+
+    include:
+      # ---------- Quality definition (always include this) ----------
+      - template: sonarr-quality-definition-series
+
+      # ---------- Pick ONE quality profile + its custom formats ----------
+
+      # WEB-DL 1080p — good default, grabs WEB-DL/WEBRip in 1080p
+#      - template: sonarr-v4-quality-profile-web-1080p
+#      - template: sonarr-v4-custom-formats-web-1080p
+
+      # WEB-DL 2160p — 4K WEB-DL with HDR
+      - template: sonarr-v4-quality-profile-web-2160p
+      - template: sonarr-v4-custom-formats-web-2160p
+
+    # Override specific custom format scores if needed:
+    # custom_formats:
+    #   - trash_ids:
+    #       - 32b367365729d530ca1c124a0b180c64  # Bad Dual Groups
+    #     assign_scores_to:
+    #       - name: WEB-1080p
+    #         score: -10000
+
+###############################################################################
+# Radarr
+###############################################################################
+radarr:
+  movies:
+    base_url: http://radarr:7878
+    api_key: !env_var RADARR_API_KEY
+
+    replace_existing_custom_formats: true
+    delete_old_custom_formats: true
+
+    include:
+      # ---------- Quality definition (always include this) ----------
+      - template: radarr-quality-definition-movie
+
+      # ---------- Pick ONE quality profile + its custom formats ----------
+
+      # HD Bluray + WEB — 1080p Bluray/Remux preferred, WEB-DL fallback
+      # Best all-round choice for 1080p libraries
+#      - template: radarr-quality-profile-hd-bluray-web
+#      - template: radarr-custom-formats-hd-bluray-web
+
+      # Remux + WEB 1080p — prefers full remuxes (large files, best quality)
+      # - template: radarr-quality-profile-remux-web-1080p
+      # - template: radarr-custom-formats-remux-web-1080p
+
+      # Remux + WEB 2160p — 4K remuxes with HDR/DV (very large files)
+      # - template: radarr-quality-profile-remux-web-2160p
+      # - template: radarr-custom-formats-remux-web-2160p
+
+      # SQP-1 (1080p) — streaming-optimised, smaller files, good quality
+      # Good if storage is tight or you mostly stream to devices
+      # - template: radarr-quality-profile-sqp-1-1080p
+      # - template: radarr-custom-formats-sqp-1-1080p
+
+      # SQP-1 (2160p) — 4K streaming-optimised
+      - template: radarr-quality-profile-sqp-1-2160p
+      - template: radarr-custom-formats-sqp-1-2160p
+
+    # Override specific custom format scores if needed:
+    # custom_formats:
+    #   - trash_ids:
+    #       - b6832f586342ef70d9c128d40c07b872  # Bad Dual Groups
+    #     assign_scores_to:
+    #       - name: HD Bluray + WEB
+    #         score: -10000

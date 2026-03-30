@@ -1,0 +1,44 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+alerting:
+  alertmanagers:
+    # Primary: external Alertmanager on Oracle Cloud (survives pancake downtime)
+    - static_configs:
+        - targets: ['powder:9093']
+    # Fallback: local Alertmanager (if powder is unreachable)
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Host metrics (pancake)
+  - job_name: node-exporter
+    static_configs:
+      - targets: ['host-gateway:9100']
+        labels:
+          instance: pancake
+
+  # Container metrics (pancake)
+  - job_name: cadvisor
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          instance: pancake
+
+  ## Uncomment to monitor charm (requires node-exporter + cAdvisor there)
+  ## Use the machine's LAN IP or Tailscale IP
+  # - job_name: node-exporter-home
+  #   scrape_interval: 60s
+  #   static_configs:
+  #     - targets: ['<charm-ip>:9100']
+  #       labels:
+  #         instance: charm

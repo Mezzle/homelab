@@ -1,0 +1,210 @@
+##############################################################################
+# Immich — self-hosted photo/video management with ML
+#
+# Photos stored on NAS via CIFS (nas-photos volume).
+# Hardware acceleration via extends files — swap backends by changing the
+# extends: service: line (nvenc, quicksync, vaapi, cpu, etc.)
+#
+# Required:
+#   - Copy .env.example to .env and fill in your values
+#   - For NVIDIA: nvidia-container-toolkit installed on host
+#   - NAS share accessible from this machine
+##############################################################################
+
+x-common-env: &common-env
+  TZ: Europe/London
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 30s
+
+x-tailscale-env: &tailscale-env
+  TS_AUTHKEY: ${TS_AUTHKEY}
+  TS_STATE_DIR: /var/lib/tailscale
+  TS_USERSPACE: "false"
+  TS_ENABLE_HEALTH_CHECK: "true"
+
+x-tailscale-sidecar: &tailscale-sidecar
+  image: tailscale/tailscale:latest
+  restart: unless-stopped
+  networks:
+    - immich
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+  devices:
+    - /dev/net/tun
+  deploy:
+    resources:
+      limits:
+        memory: 128M
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /run
+  healthcheck:
+    <<: *healthcheck-defaults
+    test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+  logging: *default-logging
+
+networks:
+  immich:
+    driver: bridge
+
+volumes:
+  immich-db:
+  immich-model-cache:
+  nas-photos:
+    driver: local
+    driver_opts:
+      type: cifs
+      device: //${NAS_HOST}/${NAS_PHOTOS_SHARE}
+      o: "addr=${NAS_HOST},username=${NAS_PHOTOS_USER},password=${NAS_PHOTOS_PASS},uid=1000,gid=1000,iocharset=utf8,vers=3.0,file_mode=0755,dir_mode=0755,soft"
+
+services:
+  ##########################################################################
+  # Immich Server
+  #
+  # Hardware transcoding: change extends → service to match your GPU.
+  # Options: nvenc (NVIDIA), quicksync (Intel), vaapi, cpu
+  ##########################################################################
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
+    container_name: immich-server
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    extends:
+      file: hwaccel.transcoding.yml
+      service: ${IMMICH_TRANSCODING_BACKEND:-nvenc}
+    networks:
+      - immich
+    depends_on:
+      immich-db:
+        condition: service_healthy
+      immich-redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    ports:
+      - 2283:2283
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *common-env
+    volumes:
+      - nas-photos:/data
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      disable: false
+    logging: *default-logging
+
+  ##########################################################################
+  # Immich Machine Learning
+  #
+  # Hardware acceleration: change extends → service to match your GPU.
+  # Options: cuda (NVIDIA), openvino (Intel), armnn, cpu
+  ##########################################################################
+  immich-ml:
+    # For hardware acceleration, add suffix: -cuda, -rocm, -openvino, -armnn, -rknn
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}${IMMICH_ML_IMAGE_SUFFIX:--cuda}
+    container_name: immich-ml
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    extends:
+      file: hwaccel.ml.yml
+      service: ${IMMICH_ML_BACKEND:-cuda}
+    networks:
+      - immich
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *common-env
+    volumes:
+      - immich-model-cache:/cache
+    healthcheck:
+      disable: false
+    logging: *default-logging
+
+  ##########################################################################
+  # PostgreSQL (with pgvector + vectorchord for ML embeddings)
+  #
+  # Image pinned by SHA for reproducibility — update from Immich releases.
+  ##########################################################################
+  immich-db:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23
+    container_name: immich-db
+    restart: unless-stopped
+    networks:
+      - immich
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    shm_size: 128mb
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE_NAME:-immich}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - ${DB_DATA_LOCATION:-./appdata/postgres}:/var/lib/postgresql/data
+    healthcheck:
+      disable: false
+    logging: *default-logging
+
+  ##########################################################################
+  # Valkey (Redis-compatible) — pinned by SHA
+  ##########################################################################
+  immich-redis:
+    image: docker.io/valkey/valkey:9@sha256:3eeb09785cd61ec8e3be35f8804c8892080f3ca21934d628abc24ee4ed1698f6
+    container_name: immich-redis
+    restart: unless-stopped
+    networks:
+      - immich
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Tailscale sidecar
+  ##########################################################################
+  ts-immich:
+    <<: *tailscale-sidecar
+    container_name: ts-immich
+    hostname: ts-immich
+    depends_on:
+      immich-server:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: immich
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/immich/state:/var/lib/tailscale
+      - ./config/tailscale/immich/serve.json:/config/serve.json:ro

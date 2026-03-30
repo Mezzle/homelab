@@ -1,0 +1,14 @@
+- search:
+    provider: google
+    target: _blank
+
+- greeting:
+    text_size: xl
+    text: Homelab
+
+- datetime:
+    text_size: xl
+    format:
+      dateStyle: short
+      timeStyle: short
+      hour12: false

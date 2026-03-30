@@ -1,0 +1,140 @@
+##############################################################################
+# Monitoring stack — AdGuard Home (backup) + AG Sync
+#
+# Runs on the Mac Mini. AdGuard acts as a backup DNS instance, synced
+# from the primary on the Raspberry Pi.
+#
+# Note: Uptime Kuma and Alertmanager have moved to the powder (cloud)
+# stack for external monitoring that survives home outages.
+#
+# Required:
+#   - Copy .env.example to .env and fill in your values
+##############################################################################
+
+x-common-env: &common-env
+  TZ: Europe/London
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 15s
+
+x-tailscale-env: &tailscale-env
+  TS_AUTHKEY: ${TS_AUTHKEY}
+  TS_STATE_DIR: /var/lib/tailscale
+  TS_USERSPACE: "false"
+  TS_ENABLE_HEALTH_CHECK: "true"
+
+x-tailscale-sidecar: &tailscale-sidecar
+  image: tailscale/tailscale:latest
+  restart: unless-stopped
+  networks:
+    - monitoring
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+  devices:
+    - /dev/net/tun
+  deploy:
+    resources:
+      limits:
+        memory: 128M
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /run
+  healthcheck:
+    <<: *healthcheck-defaults
+    test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+  logging: *default-logging
+
+networks:
+  monitoring:
+    driver: bridge
+
+services:
+  ##########################################################################
+  # AdGuard Home — backup DNS instance
+  # Kept in sync with the primary on the Raspberry Pi via adguard-sync
+  ##########################################################################
+  adguard:
+    image: adguard/adguardhome:latest
+    container_name: adguard
+    restart: unless-stopped
+    networks:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    ports:
+      - 53:53/tcp
+      - 53:53/udp
+      - 3000:3000
+    volumes:
+      - ./appdata/adguard/work:/opt/adguardhome/work
+      - ./appdata/adguard/conf:/opt/adguardhome/conf
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+    logging: *default-logging
+
+  ##########################################################################
+  # AdGuard Home Sync — syncs config from Pi (primary) to here (replica)
+  ##########################################################################
+  adguard-sync:
+    image: ghcr.io/bakito/adguardhome-sync:latest
+    container_name: adguard-sync
+    restart: unless-stopped
+    networks:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    environment:
+      <<: *common-env
+      # Primary (Raspberry Pi)
+      ORIGIN_URL: ${ADGUARD_PRIMARY_URL}
+      ORIGIN_USERNAME: ${ADGUARD_PRIMARY_USER}
+      ORIGIN_PASSWORD: ${ADGUARD_PRIMARY_PASS}
+      # Replica (this instance)
+      REPLICA1_URL: http://adguard:3000
+      REPLICA1_USERNAME: ${ADGUARD_REPLICA_USER}
+      REPLICA1_PASSWORD: ${ADGUARD_REPLICA_PASS}
+      # Sync every 30 minutes
+      CRON: "*/30 * * * *"
+      RUN_ON_START: "true"
+    depends_on:
+      adguard:
+        condition: service_healthy
+    logging: *default-logging
+
+  ##########################################################################
+  # Tailscale sidecars
+  ##########################################################################
+  ts-adguard:
+    <<: *tailscale-sidecar
+    container_name: ts-adguard
+    hostname: ts-adguard
+    depends_on:
+      adguard:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: adguard
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/adguard/state:/var/lib/tailscale
+      - ./config/tailscale/adguard/serve.json:/config/serve.json:ro

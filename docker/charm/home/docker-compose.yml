@@ -1,0 +1,230 @@
+##############################################################################
+# Home stack — MQTT, cameras, Zigbee, MySQL for Home Assistant
+#
+# Lightweight services that support Home Assistant on the Dell box.
+# Runs on the Mac Mini (4GB RAM).
+#
+# Required:
+#   - Copy .env.example to .env and fill in your values
+##############################################################################
+
+x-common-env: &common-env
+  TZ: Europe/London
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 15s
+
+x-tailscale-env: &tailscale-env
+  TS_AUTHKEY: ${TS_AUTHKEY}
+  TS_STATE_DIR: /var/lib/tailscale
+  TS_USERSPACE: "false"
+  TS_ENABLE_HEALTH_CHECK: "true"
+
+x-tailscale-sidecar: &tailscale-sidecar
+  image: tailscale/tailscale:latest
+  restart: unless-stopped
+  networks:
+    - home
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+  devices:
+    - /dev/net/tun
+  deploy:
+    resources:
+      limits:
+        memory: 128M
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /run
+  healthcheck:
+    <<: *healthcheck-defaults
+    test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+  logging: *default-logging
+
+networks:
+  home:
+    driver: bridge
+
+volumes:
+  mysql-data:
+
+services:
+  ##########################################################################
+  # Mosquitto — MQTT broker
+  ##########################################################################
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: mosquitto
+    restart: unless-stopped
+    networks:
+      - home
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    ports:
+      - 1883:1883
+      - 9001:9001
+    volumes:
+      - ./config/mosquitto:/mosquitto/config:ro
+      - ./appdata/mosquitto/data:/mosquitto/data
+      - ./appdata/mosquitto/log:/mosquitto/log
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/broker/uptime", "-C", "1", "-i", "healthcheck", "-W", "3"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Scrypted — Ring cameras → HomeKit bridge
+  ##########################################################################
+  scrypted:
+    image: ghcr.io/koush/scrypted:latest
+    container_name: scrypted
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # Host network for HomeKit mDNS discovery
+    network_mode: host
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    environment:
+      <<: *common-env
+    volumes:
+      - ./appdata/scrypted:/server/volume
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:10443"]
+      start_period: 30s
+    logging: *default-logging
+
+  ##########################################################################
+  # Zigbee2MQTT — Zigbee coordinator (network adapter)
+  ##########################################################################
+  z2m:
+    image: koenkk/zigbee2mqtt:latest
+    container_name: z2m
+    restart: unless-stopped
+    networks:
+      - home
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    ports:
+      - 8080:8080
+    environment:
+      <<: *common-env
+      ZIGBEE2MQTT_CONFIG_SERIAL_PORT: tcp://${Z2M_ADAPTER_HOST}:${Z2M_ADAPTER_PORT:-6638}
+      ZIGBEE2MQTT_CONFIG_MQTT_SERVER: mqtt://mosquitto:1883
+    volumes:
+      - ./appdata/z2m:/app/data
+      - ./config/z2m:/app/data/configuration.yaml:ro
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080"]
+    logging: *default-logging
+
+  ##########################################################################
+  # MySQL — database for Home Assistant
+  ##########################################################################
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
+    networks:
+      - home
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-homeassistant}
+      MYSQL_USER: ${MYSQL_USER:-homeassistant}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command: >
+      --innodb-buffer-pool-size=128M
+      --innodb-log-file-size=32M
+      --max-connections=50
+      --performance-schema=OFF
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      start_period: 30s
+    logging: *default-logging
+
+  ##########################################################################
+  # Tailscale sidecars
+  ##########################################################################
+  ts-mosquitto:
+    <<: *tailscale-sidecar
+    container_name: ts-mosquitto
+    hostname: ts-mosquitto
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: mosquitto
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/mosquitto/state:/var/lib/tailscale
+      - ./config/tailscale/mosquitto/serve.json:/config/serve.json:ro
+
+  ts-scrypted:
+    <<: *tailscale-sidecar
+    container_name: ts-scrypted
+    hostname: ts-scrypted
+    depends_on:
+      scrypted:
+        condition: service_healthy
+    extra_hosts:
+      - "host-gateway:host-gateway"
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: scrypted
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/scrypted/state:/var/lib/tailscale
+      - ./config/tailscale/scrypted/serve.json:/config/serve.json:ro
+
+  ts-z2m:
+    <<: *tailscale-sidecar
+    container_name: ts-z2m
+    hostname: ts-z2m
+    depends_on:
+      z2m:
+        condition: service_healthy
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: z2m
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/z2m/state:/var/lib/tailscale
+      - ./config/tailscale/z2m/serve.json:/config/serve.json:ro
