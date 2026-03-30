@@ -126,7 +126,7 @@ services:
       - ./config/seedbox:/config/seedbox:ro,z
     command: >
       mount
-        :sftp,host=${SEEDBOX_HOST},user=${SEEDBOX_USER},port=${SEEDBOX_PORT:-22},key_file=/config/seedbox/id_rsa
+        :sftp,host=${SEEDBOX_HOST},user=${SEEDBOX_USER},port=${SEEDBOX_PORT:-22},key_file=/config/seedbox/id_ed25519
         ${SEEDBOX_REMOTE_PATH}
         /mnt/seedbox
         --vfs-cache-mode full
