@@ -114,10 +114,10 @@ sync_stack() {
     if [[ -n "$value" ]]; then
       set_env_value "$env_file" "$key" "$value"
       ok "$key"
-      ((updated++))
+      ((updated++)) || true
     else
       skip "$key (not found in 1Password)"
-      ((skipped++))
+      ((skipped++)) || true
     fi
   done < "$stack_dir/.env.example"
 
