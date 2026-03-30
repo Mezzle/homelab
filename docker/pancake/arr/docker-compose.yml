@@ -163,7 +163,6 @@ services:
     environment:
       <<: *common-env
       VPN_SERVICE_PROVIDER: private internet access
-      VPN_TYPE: wireguard
       OPENVPN_USER: ${PIA_USER}
       OPENVPN_PASSWORD: ${PIA_PASS}
       SERVER_REGIONS: ${PIA_REGION:-Netherlands}
