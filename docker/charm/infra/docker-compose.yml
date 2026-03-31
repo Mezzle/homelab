@@ -49,7 +49,7 @@ x-tailscale-sidecar: &tailscale-sidecar
     - /run
   healthcheck:
     <<: *healthcheck-defaults
-    test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+    test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9002/healthz"]
   logging: *default-logging
 
 networks:
