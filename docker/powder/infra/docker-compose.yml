@@ -71,7 +71,7 @@ services:
     networks:
       - infra
     security_opt:
-      - no-new-privileges:true
+      - label=disable
     deploy:
       resources:
         limits:
@@ -82,9 +82,9 @@ services:
       <<: *common-env
       DOCKGE_STACKS_DIR: /stacks
     volumes:
-      - ./appdata/dockge:/app/data:z
+      - ./appdata/dockge:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
-      - /srv/docker:/stacks:z
+      - /srv/docker:/stacks
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:5001', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
