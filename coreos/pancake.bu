@@ -16,9 +16,9 @@
 #   1. SSH in:  ssh mez@<ip>
 #   2. Find HDD device ID:
 #        ls -l /dev/disk/by-id/ | grep sdb   # or whatever the HDD is
-#      Then update mnt-storage.mount with the correct by-id path.
+#      Then update var-mnt-storage.mount with the correct by-id path.
 #   3. Format HDD if needed:  sudo mkfs.ext4 /dev/disk/by-id/<YOUR-HDD-ID>
-#   4. Start storage mount:  sudo systemctl start mnt-storage.mount
+#   4. Start storage mount:  sudo systemctl start var-mnt-storage.mount
 #   5. Run the bootstrap script:
 #        curl -sL https://raw.githubusercontent.com/mez-0/arr/main/scripts/bootstrap.sh \
 #          | bash -s -- docker/pancake
@@ -76,22 +76,22 @@ storage:
     - path: /etc/ucore-autorebase
       mode: 0754
 
-    - path: /mnt/storage
+    - path: /var/mnt/storage
       mode: 0755
       user: { name: mez }
       group: { name: mez }
 
-    - path: /mnt/storage/media
+    - path: /var/mnt/storage/media
       mode: 0755
       user: { name: mez }
       group: { name: mez }
 
-    - path: /mnt/storage/photos
+    - path: /var/mnt/storage/photos
       mode: 0755
       user: { name: mez }
       group: { name: mez }
 
-    - path: /mnt/storage/cache
+    - path: /var/mnt/storage/cache
       mode: 0755
       user: { name: mez }
       group: { name: mez }
@@ -238,40 +238,40 @@ systemd:
       enabled: true
 
     ##################################################################
-    # HDD storage mount — /mnt/storage
+    # HDD storage mount — /var/mnt/storage
     #
     # IMPORTANT: Replace the device path below with the actual
     # /dev/disk/by-id/ path for your 1TB HDD. Find it with:
     #   ls -l /dev/disk/by-id/ | grep -v part
     ##################################################################
-    - name: mnt-storage.mount
+    - name: var-mnt-storage.mount
       enabled: true
       contents: |
         [Unit]
-        Description=Mount 1TB HDD at /mnt/storage
+        Description=Mount 1TB HDD at /var/mnt/storage
         Before=local-fs.target
 
         [Mount]
         What=/dev/disk/by-id/CHANGEME-1TB-HDD-ID
-        Where=/mnt/storage
+        Where=/var/mnt/storage
         Type=ext4
         Options=defaults,noatime
 
         [Install]
         WantedBy=local-fs.target
 
-    - name: mnt-storage-permissions.service
+    - name: var-mnt-storage-permissions.service
       enabled: true
       contents: |
         [Unit]
-        Description=Set ownership on /mnt/storage after mount
-        After=mnt-storage.mount
-        Requires=mnt-storage.mount
+        Description=Set ownership on /var/mnt/storage after mount
+        After=var-mnt-storage.mount
+        Requires=var-mnt-storage.mount
 
         [Service]
         Type=oneshot
         RemainAfterExit=yes
-        ExecStart=/usr/bin/chown -R mez:mez /mnt/storage
+        ExecStart=/usr/bin/chown -R mez:mez /var/mnt/storage
 
         [Install]
         WantedBy=local-fs.target
@@ -376,8 +376,8 @@ systemd:
       contents: |
         [Unit]
         Description=arr media stack (docker compose)
-        After=docker.service network-online.target mnt-storage.mount
-        Requires=docker.service mnt-storage.mount
+        After=docker.service network-online.target var-mnt-storage.mount
+        Requires=docker.service var-mnt-storage.mount
         ConditionPathExists=/srv/docker/pancake/arr/docker-compose.yml
 
         [Service]
@@ -402,8 +402,8 @@ systemd:
       contents: |
         [Unit]
         Description=Immich photo management stack (docker compose)
-        After=docker.service network-online.target mnt-storage.mount
-        Requires=docker.service mnt-storage.mount
+        After=docker.service network-online.target var-mnt-storage.mount
+        Requires=docker.service var-mnt-storage.mount
         ConditionPathExists=/srv/docker/pancake/immich/docker-compose.yml
 
         [Service]
@@ -428,8 +428,8 @@ systemd:
       contents: |
         [Unit]
         Description=Music stack (docker compose)
-        After=docker.service network-online.target mnt-storage.mount
-        Requires=docker.service mnt-storage.mount
+        After=docker.service network-online.target var-mnt-storage.mount
+        Requires=docker.service var-mnt-storage.mount
         ConditionPathExists=/srv/docker/pancake/music/docker-compose.yml
 
         [Service]
@@ -454,8 +454,8 @@ systemd:
       contents: |
         [Unit]
         Description=Infrastructure stack (docker compose)
-        After=docker.service network-online.target mnt-storage.mount
-        Requires=docker.service mnt-storage.mount
+        After=docker.service network-online.target var-mnt-storage.mount
+        Requires=docker.service var-mnt-storage.mount
         ConditionPathExists=/srv/docker/pancake/infra/docker-compose.yml
 
         [Service]
