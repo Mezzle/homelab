@@ -25,7 +25,7 @@ x-healthcheck-defaults: &healthcheck-defaults
 x-tailscale-env: &tailscale-env
   TS_AUTHKEY: ${TS_AUTHKEY}
   TS_STATE_DIR: /var/lib/tailscale
-  TS_USERSPACE: "false"
+  TS_USERSPACE: "true"
   TS_ENABLE_HEALTH_CHECK: "true"
 
 x-tailscale-sidecar: &tailscale-sidecar
