@@ -60,7 +60,7 @@ x-tailscale-sidecar: &tailscale-sidecar
     - /run
   healthcheck:
     <<: *healthcheck-defaults
-    test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+    test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:80"]
   logging: *default-logging
 
 x-security-opts: &security-opts
@@ -112,7 +112,7 @@ services:
     cap_add:
       - SYS_ADMIN
     security_opt:
-      - apparmor:unconfined
+      - label=disable
     devices:
       - /dev/fuse
     deploy:
@@ -122,7 +122,7 @@ services:
     environment:
       <<: *common-env
     volumes:
-      - ./appdata/seedbox:/mnt/seedbox:shared
+      - ./appdata/seedbox:/mnt/seedbox:z,shared
       - ./config/seedbox:/config/seedbox:ro,z
     command: >
       mount

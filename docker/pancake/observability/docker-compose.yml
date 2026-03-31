@@ -60,7 +60,7 @@ x-tailscale-sidecar: &tailscale-sidecar
     - /run
   healthcheck:
     <<: *healthcheck-defaults
-    test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+    test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:80"]
   logging: *default-logging
 
 networks:
@@ -180,8 +180,7 @@ services:
     image: gcr.io/cadvisor/cadvisor:v0.55.1
     container_name: cadvisor
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
+    privileged: true
     networks:
       - observability
     deploy:
@@ -198,6 +197,7 @@ services:
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/kmsg:/dev/kmsg:ro
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/healthz"]
