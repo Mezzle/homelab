@@ -125,6 +125,7 @@ services:
       HOMEPAGE_VAR_IMMICH_API_KEY: ${IMMICH_API_KEY:-}
       HOMEPAGE_VAR_ADGUARD_USER: ${ADGUARD_USER:-admin}
       HOMEPAGE_VAR_ADGUARD_PASS: ${ADGUARD_PASS:-}
+      HOMEPAGE_ALLOWED_HOSTS: ${HOMEPAGE_ALLOWED_HOSTS:-localhost,homepage.${TAILNET}.ts.net}
     volumes:
       - ./config/homepage:/app/config:z
       - /var/run/docker.sock:/var/run/docker.sock:ro
