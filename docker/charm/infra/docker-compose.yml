@@ -84,7 +84,7 @@ services:
     volumes:
       - ./appdata/dockge:/app/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /srv/docker:/stacks:ro
+      - /srv/docker/charm:/stacks:ro
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:5001"]

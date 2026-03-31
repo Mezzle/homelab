@@ -87,8 +87,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /usr/bin/docker:/usr/bin/docker:ro
       - /usr/libexec/docker/cli-plugins:/usr/libexec/docker/cli-plugins:ro
-      # Mount the parent stacks directory so Dockge can see all stacks
-      - /srv/docker:/stacks
+      # Mount the server's stacks directory so Dockge can see all stacks
+      - /srv/docker/pancake:/stacks
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:5001', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
