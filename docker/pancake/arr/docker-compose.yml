@@ -133,6 +133,7 @@ services:
         --vfs-read-chunk-size 32M
         --vfs-read-chunk-size-limit 256M
         --allow-other
+        --allow-non-empty
         --dir-cache-time 5m
         --poll-interval 30s
         --transfers 4
