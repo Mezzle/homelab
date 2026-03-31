@@ -175,7 +175,7 @@ storage:
           echo ""
           echo "  uCore — $(rpm-ostree status --booted | grep -oP 'Version: \K\S+' || echo 'unknown')"
           echo "  Host: powder (Ampere A1 / Oracle Cloud)"
-          echo "  Tailscale: $(tailscale status --self --peers=false 2>/dev/null | awk '{print $1}' || echo 'not connected')"
+          echo "  Tailscale: $(tailscale ip --4 || echo 'not connected')"
           echo "  Cockpit:   https://localhost:9090"
           echo "  Stacks:    /srv/docker/powder/{infra,monitoring}"
           echo "  Commands:  make -C /srv/docker/powder help"

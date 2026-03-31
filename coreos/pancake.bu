@@ -216,7 +216,7 @@ storage:
           echo ""
           echo "  uCore — $(rpm-ostree status --booted | grep -oP 'Version: \K\S+' || echo 'unknown')"
           echo "  Host: pancake (i7-5700HQ / 16GB / GTX 970M)"
-          echo "  Tailscale: $(tailscale status --self --peers=false 2>/dev/null | awk '{print $1}' || echo 'not connected')"
+          echo "  Tailscale: $(tailscale ip --4 || echo 'not connected')"
           echo "  Cockpit:   https://localhost:9090"
           echo "  Stacks:    /srv/docker/pancake/{arr,immich,music,infra,observability}"
           echo "  Commands:  make -C /srv/docker/pancake help"
