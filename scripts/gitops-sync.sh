@@ -172,41 +172,52 @@ fi
 
 ###############################################################################
 # Step 3: Apply OS config changes
+#
+# Reads coreos/os-configs/manifest.conf for file mappings.
+# Shared files (no directory prefix) apply to all servers.
+# Per-server files (e.g. pancake/motd.sh) apply only to that host.
 ###############################################################################
-OS_RELOAD_SYSCTL=false
-OS_RELOAD_DOCKER=false
-OS_RELOAD_SSH=false
+HOSTNAME=$(hostname -s)
+MANIFEST="$REPO_DIR/coreos/os-configs/manifest.conf"
+OS_CONFIGS_DIR="$REPO_DIR/coreos/os-configs"
+declare -A RELOAD_ACTIONS
 
 apply_os_file() {
   local src="$1" dest="$2" mode="${3:-0644}"
-  [[ -f "$src" ]] || return
+  [[ -f "$src" ]] || return 1
   if [[ -f "$dest" ]] && diff -q "$src" "$dest" >/dev/null 2>&1; then
-    return
+    return 1
   fi
   log "Updating OS config: $dest"
-  sudo install -m "$mode" "$src" "$dest"
+  sudo install -D -m "$mode" "$src" "$dest"
 }
 
-while IFS= read -r file; do
-  case "$file" in
-    coreos/os-configs/sysctl-*.conf)
-      apply_os_file "$REPO_DIR/$file" "/etc/sysctl.d/$(basename "$file")"
-      OS_RELOAD_SYSCTL=true
-      ;;
-    coreos/os-configs/docker-daemon.json)
-      apply_os_file "$REPO_DIR/$file" "/etc/docker/daemon.json"
-      OS_RELOAD_DOCKER=true
-      ;;
-    coreos/os-configs/sshd-*.conf)
-      apply_os_file "$REPO_DIR/$file" "/etc/ssh/sshd_config.d/$(basename "$file")" "0600"
-      OS_RELOAD_SSH=true
-      ;;
-  esac
-done <<< "$CHANGED_FILES"
+if [[ -f "$MANIFEST" ]] && echo "$CHANGED_FILES" | grep -q "^coreos/os-configs/"; then
+  while read -r src dest mode action; do
+    # Skip comments and blank lines
+    [[ -z "$src" || "$src" == \#* ]] && continue
 
-[[ "$OS_RELOAD_SYSCTL" == true ]] && { log "Reloading sysctl..."; sudo sysctl --system --quiet && log "  sysctl OK" || log "  ERROR: sysctl reload failed"; }
-[[ "$OS_RELOAD_DOCKER" == true ]] && { log "Reloading Docker..."; sudo systemctl reload docker && log "  docker OK" || log "  ERROR: docker reload failed"; }
-[[ "$OS_RELOAD_SSH" == true ]] && { log "Reloading SSH..."; sudo systemctl reload sshd && log "  sshd OK" || log "  ERROR: sshd reload failed"; }
+    # Per-server files: only apply if the prefix matches this hostname
+    src_dir=$(dirname "$src")
+    if [[ "$src_dir" != "." ]]; then
+      [[ "$src_dir" != "$HOSTNAME" ]] && continue
+    fi
+
+    # Only process files that actually changed
+    if ! echo "$CHANGED_FILES" | grep -q "^coreos/os-configs/$src$"; then
+      continue
+    fi
+
+    if apply_os_file "$OS_CONFIGS_DIR/$src" "$dest" "${mode:-0644}"; then
+      [[ -n "${action:-}" ]] && RELOAD_ACTIONS["$action"]=1
+    fi
+  done < "$MANIFEST"
+
+  # Run reload actions
+  [[ -n "${RELOAD_ACTIONS[sysctl]:-}" ]] && { log "Reloading sysctl..."; sudo sysctl --system --quiet && log "  sysctl OK" || log "  ERROR: sysctl reload failed"; }
+  [[ -n "${RELOAD_ACTIONS[docker]:-}" ]] && { log "Reloading Docker..."; sudo systemctl reload docker && log "  docker OK" || log "  ERROR: docker reload failed"; }
+  [[ -n "${RELOAD_ACTIONS[sshd]:-}" ]]   && { log "Reloading SSH..."; sudo systemctl reload sshd && log "  sshd OK" || log "  ERROR: sshd reload failed"; }
+fi
 
 log "Sync complete: $BEFORE → $AFTER"
 
