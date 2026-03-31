@@ -84,6 +84,8 @@ services:
     volumes:
       - ./appdata/dockge:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker:ro
+      - /usr/libexec/docker/cli-plugins:/usr/libexec/docker/cli-plugins:ro
       - /srv/docker:/stacks
     healthcheck:
       <<: *healthcheck-defaults
