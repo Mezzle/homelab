@@ -60,7 +60,7 @@ x-tailscale-sidecar: &tailscale-sidecar
     - /run
   healthcheck:
     <<: *healthcheck-defaults
-    test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9002/healthz"]
+    test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:9002/healthz" ]
   logging: *default-logging
 
 x-security-opts: &security-opts
@@ -140,7 +140,7 @@ services:
         --log-level INFO
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "ls", "/mnt/seedbox"]
+      test: [ "CMD", "ls", "/mnt/seedbox" ]
     logging: *default-logging
 
   ##########################################################################
@@ -174,7 +174,7 @@ services:
       - ./config/gluetun:/gluetun:z
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9999"]
+      test: [ "CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9999" ]
       retries: 5
       start_period: 30s
     logging: *default-logging
@@ -199,7 +199,7 @@ services:
       CAPTCHA_SOLVER: none
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "curl", "-f", "http://localhost:8191"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8191" ]
     logging: *default-logging
 
   ##########################################################################
@@ -225,7 +225,7 @@ services:
       - ./appdata/prowlarr:/config:z
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "curl", "-f", "http://localhost:9696/ping"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9696/ping" ]
     logging: *default-logging
 
   ##########################################################################
@@ -258,7 +258,7 @@ services:
       - ./appdata/seedbox:/data/seedbox:ro
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "curl", "-f", "http://localhost:8989/ping"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8989/ping" ]
     logging: *default-logging
 
   ##########################################################################
@@ -291,7 +291,7 @@ services:
       - ./appdata/seedbox:/data/seedbox:ro
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "curl", "-f", "http://localhost:7878/ping"]
+      test: [ "CMD", "curl", "-f", "http://localhost:7878/ping" ]
     logging: *default-logging
 
   ##########################################################################
@@ -323,7 +323,7 @@ services:
       - nas-media:/data/media
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "curl", "-f", "http://localhost:6767/ping"]
+      test: [ "CMD", "curl", "-f", "http://localhost:6767/ping" ]
     logging: *default-logging
 
   ##########################################################################
@@ -464,21 +464,16 @@ services:
     # --- GPU hardware transcoding (uncomment ONE section) ---
     #
     # NVIDIA (requires nvidia-container-toolkit):
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-    #
-    # Intel Quick Sync (Mac Mini Intel — pass through the render device):
-    # devices:
-    #   - /dev/dri:/dev/dri
     deploy:
       resources:
         limits:
           memory: 4G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+
     environment:
       <<: *common-env
       VERSION: docker
@@ -491,7 +486,7 @@ services:
       - nas-media:/media:ro
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "curl", "-f", "http://localhost:32400/identity"]
+      test: [ "CMD", "curl", "-f", "http://localhost:32400/identity" ]
       start_period: 30s
     logging: *default-logging
 
