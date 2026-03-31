@@ -193,7 +193,6 @@ services:
     command:
       - '--housekeeping_interval=30s'
       - '--docker_only=true'
-      - '--disable_metrics=accelerator,cpu_topology,disk,diskIO,memory_numa,network,process,referenced_memory,resctrl,sched,tcp,udp,hugetlb'
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro

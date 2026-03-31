@@ -126,8 +126,7 @@ services:
       - ./config/seedbox:/config/seedbox:ro,z
     command: >
       mount
-        :sftp,host=${SEEDBOX_HOST},user=${SEEDBOX_USER},port=${SEEDBOX_PORT:-22},key_file=/config/seedbox/id_ed25519
-        ${SEEDBOX_REMOTE_PATH}
+        :sftp,host=${SEEDBOX_HOST},user=${SEEDBOX_USER},port=${SEEDBOX_PORT:-22},key_file=/config/seedbox/id_ed25519:${SEEDBOX_REMOTE_PATH}
         /mnt/seedbox
         --vfs-cache-mode full
         --vfs-cache-max-size 2G
@@ -370,6 +369,7 @@ services:
     read_only: true
     tmpfs:
       - /run
+      - /tmp
     environment:
       # Only grant the minimum permissions autoheal needs
       CONTAINERS: 1
