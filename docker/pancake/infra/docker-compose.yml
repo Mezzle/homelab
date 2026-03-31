@@ -89,7 +89,7 @@ services:
       - /srv/docker:/stacks:ro
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5001"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5001', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
     logging: *default-logging
 
   ##########################################################################
