@@ -173,7 +173,7 @@ services:
       - ./config/gluetun:/gluetun:z
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "wget", "-q", "--spider", "http://ifconfig.me"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9999"]
       retries: 5
       start_period: 30s
     logging: *default-logging
