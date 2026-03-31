@@ -547,7 +547,7 @@ systemd:
         Type=oneshot
         WorkingDirectory=/srv
         Environment=GITOPS_SERVER_DIR=docker/pancake
-        ExecStart=/srv/scripts/gitops-sync.sh
+        ExecStart=/bin/bash /srv/scripts/gitops-sync.sh
         User=mez
         Group=mez
         # Allow sudo for OS config file updates

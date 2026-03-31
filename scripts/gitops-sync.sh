@@ -15,7 +15,7 @@
 set -euo pipefail
 
 REPO_DIR="/srv"
-LOCK_FILE="/run/gitops-sync.lock"
+LOCK_FILE="/tmp/gitops-sync.lock"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TOKEN_FILE="/etc/1password-service-account.env"
 VAULT="Homelab"
