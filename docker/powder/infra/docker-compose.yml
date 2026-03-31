@@ -83,8 +83,8 @@ services:
       DOCKGE_STACKS_DIR: /stacks
     volumes:
       - ./appdata/dockge:/app/data:z
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /srv/docker:/stacks:ro,z
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /srv/docker:/stacks:z
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:5001', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
