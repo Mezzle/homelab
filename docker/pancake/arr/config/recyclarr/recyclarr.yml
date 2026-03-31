@@ -1,8 +1,9 @@
 ###############################################################################
 # Recyclarr v8.x — TRaSH Guides auto-sync configuration
 #
-# v8 replaced the template system with quality_profiles + score_sets.
-# To change profile: swap the trash_id and score_set values.
+# Both profiles accept 1080p as a starting point and upgrade to 2160p
+# when available. Sonarr targets WEB sources (typical for TV), Radarr
+# targets Remux/Bluray/WEB with remux 4K as the ceiling.
 #
 # List available profiles:  recyclarr list quality-profiles sonarr|radarr
 # List available scores:    recyclarr list score-sets sonarr|radarr
@@ -12,7 +13,10 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/recyclarr/recyclarr/master/schemas/config-schema.json
 
 ###############################################################################
-# Sonarr
+# Sonarr — WEB-2160p (Alternative)
+#
+# Grabs WEB 2160p when available, falls back to 1080p/720p, upgrades.
+# Tiers: WEB 2160p → WEB 1080p → Bluray 2160p → Bluray 1080p → 720p
 ###############################################################################
 sonarr:
   series:
@@ -25,11 +29,16 @@ sonarr:
       type: series
 
     quality_profiles:
-      - trash_id: d1498e7d189fbe6c7110ceaabb7473e6  # WEB-2160p
+      - trash_id: dfa5eaae7894077ad6449169b6eb03e0  # WEB-2160p (Alternative)
         score_set: default
 
 ###############################################################################
-# Radarr
+# Radarr — Remux 2160p (Combined)
+#
+# Grabs best available from Remux 4K down to WEB 1080p, upgrades toward
+# Remux 2160p. Good balance of quality ceiling and wide compatibility.
+# Tiers: Remux 2160p → Bluray 2160p → WEB 2160p → Remux 1080p →
+#        Bluray 1080p → WEB 1080p
 ###############################################################################
 radarr:
   movies:
@@ -39,8 +48,8 @@ radarr:
     delete_old_custom_formats: true
 
     quality_definition:
-      type: sqp-uhd
+      type: movie
 
     quality_profiles:
-      - trash_id: 5128baeb2b081b72126bc8482b2a86a0  # [SQP] SQP-1 (2160p)
-        score_set: sqp-1-2160p
+      - trash_id: d1d310673359205736b4b84acd5ea8c8  # Remux 2160p (Combined)
+        score_set: default
