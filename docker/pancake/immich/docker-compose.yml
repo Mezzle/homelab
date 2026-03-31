@@ -103,6 +103,8 @@ services:
         required: false
     environment:
       <<: *common-env
+      DB_HOSTNAME: immich-db
+      REDIS_HOSTNAME: immich-redis
     volumes:
       - nas-photos:/data
       - /etc/localtime:/etc/localtime:ro
