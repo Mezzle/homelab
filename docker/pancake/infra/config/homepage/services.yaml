@@ -9,7 +9,7 @@
         description: Media server
         widget:
           type: plex
-          url: http://plex:32400
+          url: https://plex.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           key: "{{HOMEPAGE_VAR_PLEX_TOKEN}}"
     - Sonarr:
         icon: sonarr.svg
@@ -17,7 +17,7 @@
         description: TV shows
         widget:
           type: sonarr
-          url: http://sonarr:8989
+          url: https://sonarr.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           key: "{{HOMEPAGE_VAR_SONARR_API_KEY}}"
     - Radarr:
         icon: radarr.svg
@@ -25,7 +25,7 @@
         description: Movies
         widget:
           type: radarr
-          url: http://radarr:7878
+          url: https://radarr.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           key: "{{HOMEPAGE_VAR_RADARR_API_KEY}}"
     - Prowlarr:
         icon: prowlarr.svg
@@ -33,7 +33,7 @@
         description: Indexer manager
         widget:
           type: prowlarr
-          url: http://prowlarr:9696
+          url: https://prowlarr.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           key: "{{HOMEPAGE_VAR_PROWLARR_API_KEY}}"
 
 - Photos & Music:
@@ -43,7 +43,7 @@
         description: Photo management
         widget:
           type: immich
-          url: http://immich-server:2283
+          url: https://immich.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           key: "{{HOMEPAGE_VAR_IMMICH_API_KEY}}"
     - Music Assistant:
         icon: music-assistant.svg
@@ -53,15 +53,17 @@
 - Home:
     - Home Assistant:
         icon: home-assistant.svg
-        href: http://homeassistant.local:8123
+        href: https://ha.67l.uk
         description: Smart home
     - AdGuard Home:
         icon: adguard-home.svg
-        href: https://adguard.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+#        href: https://adguard.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+        href: https://ag.67l.uk
         description: DNS filtering
         widget:
           type: adguard
-          url: http://adguard:3000
+#          url: http://adguard:3000
+          url: https://ag.67l.uk
           username: "{{HOMEPAGE_VAR_ADGUARD_USER}}"
           password: "{{HOMEPAGE_VAR_ADGUARD_PASS}}"
     - Zigbee2MQTT:
@@ -74,14 +76,7 @@
         icon: dockge.svg
         href: https://dockge.{{HOMEPAGE_VAR_TAILNET}}.ts.net
         description: Docker compose UI
-    - Cockpit (pancake):
-        icon: cockpit.svg
-        href: https://pancake:9090
-        description: OS management
-    - Cockpit (charm):
-        icon: cockpit.svg
-        href: https://charm:9090
-        description: OS management
+
 
 - Monitoring:
     - Uptime Kuma:
@@ -98,7 +93,7 @@
         description: Metrics & alerting
         widget:
           type: prometheus
-          url: http://prometheus:9090
+          url: https://prometheus.{{HOMEPAGE_VAR_TAILNET}}.ts.net
     - Alertmanager:
         icon: alertmanager.svg
         href: https://alertmanager.{{HOMEPAGE_VAR_TAILNET}}.ts.net
