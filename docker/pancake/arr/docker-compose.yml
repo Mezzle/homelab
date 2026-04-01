@@ -168,7 +168,7 @@ services:
       SERVER_REGIONS: ${PIA_REGION:-Netherlands}
       DOT: "off"
     ports:
-      - 9696:9696
+      - 127.0.0.1:9696:9696
     volumes:
       - ./config/gluetun:/gluetun:z
     healthcheck:

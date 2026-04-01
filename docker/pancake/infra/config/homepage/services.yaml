@@ -1,7 +1,6 @@
 ---
-# Service widgets
-# href: Tailscale URLs (opened in browser)
-# widget url: host-gateway URLs (reached from inside the container)
+# Service widgets — uses Tailscale hostnames resolved via MagicDNS (100.100.100.100).
+# API keys are injected via HOMEPAGE_VAR_* env vars (see .env.example).
 
 - Media:
     - Plex:
@@ -10,7 +9,7 @@
         description: Media server
         widget:
           type: plex
-          url: http://host.docker.internal:32400
+          url: https://plex.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           key: "{{HOMEPAGE_VAR_PLEX_TOKEN}}"
     - Sonarr:
         icon: sonarr.svg
@@ -18,7 +17,7 @@
         description: TV shows
         widget:
           type: sonarr
-          url: http://host.docker.internal:8989
+          url: https://sonarr.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           key: "{{HOMEPAGE_VAR_SONARR_API_KEY}}"
     - Radarr:
         icon: radarr.svg
@@ -26,7 +25,7 @@
         description: Movies
         widget:
           type: radarr
-          url: http://host.docker.internal:7878
+          url: https://radarr.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           key: "{{HOMEPAGE_VAR_RADARR_API_KEY}}"
     - Prowlarr:
         icon: prowlarr.svg
@@ -34,7 +33,7 @@
         description: Indexer manager
         widget:
           type: prowlarr
-          url: http://host.docker.internal:9696
+          url: https://prowlarr.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           key: "{{HOMEPAGE_VAR_PROWLARR_API_KEY}}"
 
 - Photos & Music:
@@ -44,7 +43,7 @@
         description: Photo management
         widget:
           type: immich
-          url: http://host.docker.internal:2283
+          url: https://immich.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           key: "{{HOMEPAGE_VAR_IMMICH_API_KEY}}"
     - Music Assistant:
         icon: music-assistant.svg
@@ -91,7 +90,7 @@
         description: Metrics & alerting
         widget:
           type: prometheus
-          url: http://host.docker.internal:9090
+          url: https://prometheus.{{HOMEPAGE_VAR_TAILNET}}.ts.net
     - Alertmanager:
         icon: alertmanager.svg
         href: https://alertmanager.{{HOMEPAGE_VAR_TAILNET}}.ts.net

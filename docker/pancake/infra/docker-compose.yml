@@ -114,6 +114,8 @@ services:
           memory: 256M
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 100.100.100.100
     ports:
       - 3000:3000
     environment:
