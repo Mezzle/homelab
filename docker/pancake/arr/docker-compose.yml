@@ -167,9 +167,8 @@ services:
       OPENVPN_PASSWORD: ${PIA_PASS}
       SERVER_REGIONS: ${PIA_REGION:-Netherlands}
       DOT: "off"
-    # Port 9696 only exposed locally for debugging — Tailscale handles external access
     ports:
-      - 127.0.0.1:9696:9696
+      - 9696:9696
     volumes:
       - ./config/gluetun:/gluetun:z
     healthcheck:

@@ -1,6 +1,7 @@
 ---
-# Service widgets — uses Tailscale hostnames for cross-host access.
-# API keys are injected via HOMEPAGE_VAR_* env vars (see .env.example).
+# Service widgets
+# href: Tailscale URLs (opened in browser)
+# widget url: host-gateway URLs (reached from inside the container)
 
 - Media:
     - Plex:
@@ -9,7 +10,7 @@
         description: Media server
         widget:
           type: plex
-          url: https://plex.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+          url: http://host.docker.internal:32400
           key: "{{HOMEPAGE_VAR_PLEX_TOKEN}}"
     - Sonarr:
         icon: sonarr.svg
@@ -17,7 +18,7 @@
         description: TV shows
         widget:
           type: sonarr
-          url: https://sonarr.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+          url: http://host.docker.internal:8989
           key: "{{HOMEPAGE_VAR_SONARR_API_KEY}}"
     - Radarr:
         icon: radarr.svg
@@ -25,7 +26,7 @@
         description: Movies
         widget:
           type: radarr
-          url: https://radarr.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+          url: http://host.docker.internal:7878
           key: "{{HOMEPAGE_VAR_RADARR_API_KEY}}"
     - Prowlarr:
         icon: prowlarr.svg
@@ -33,7 +34,7 @@
         description: Indexer manager
         widget:
           type: prowlarr
-          url: https://prowlarr.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+          url: http://host.docker.internal:9696
           key: "{{HOMEPAGE_VAR_PROWLARR_API_KEY}}"
 
 - Photos & Music:
@@ -43,7 +44,7 @@
         description: Photo management
         widget:
           type: immich
-          url: https://immich.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+          url: http://host.docker.internal:2283
           key: "{{HOMEPAGE_VAR_IMMICH_API_KEY}}"
     - Music Assistant:
         icon: music-assistant.svg
@@ -57,12 +58,10 @@
         description: Smart home
     - AdGuard Home:
         icon: adguard-home.svg
-#        href: https://adguard.{{HOMEPAGE_VAR_TAILNET}}.ts.net
         href: https://ag.67l.uk
         description: DNS filtering
         widget:
           type: adguard
-#          url: http://adguard:3000
           url: https://ag.67l.uk
           username: "{{HOMEPAGE_VAR_ADGUARD_USER}}"
           password: "{{HOMEPAGE_VAR_ADGUARD_PASS}}"
@@ -76,7 +75,6 @@
         icon: dockge.svg
         href: https://dockge.{{HOMEPAGE_VAR_TAILNET}}.ts.net
         description: Docker compose UI
-
 
 - Monitoring:
     - Uptime Kuma:
@@ -93,7 +91,7 @@
         description: Metrics & alerting
         widget:
           type: prometheus
-          url: https://prometheus.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+          url: http://host.docker.internal:9090
     - Alertmanager:
         icon: alertmanager.svg
         href: https://alertmanager.{{HOMEPAGE_VAR_TAILNET}}.ts.net
