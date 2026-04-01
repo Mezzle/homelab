@@ -2,6 +2,7 @@ title: Homelab
 theme: dark
 color: slate
 headerStyle: clean
+language: en-GB
 layout:
   Media:
     style: row
