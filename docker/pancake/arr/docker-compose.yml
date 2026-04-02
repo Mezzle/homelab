@@ -509,6 +509,7 @@ services:
           memory: 2G
     environment:
       <<: *common-env
+      SCRYPTED_DOCKER_AVAHI: "true"
     volumes:
       - ./appdata/scrypted:/server/volume:z
     healthcheck:
