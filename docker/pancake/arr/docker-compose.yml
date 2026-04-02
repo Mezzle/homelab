@@ -513,7 +513,7 @@ services:
       - ./appdata/scrypted:/server/volume:z
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "wget", "-q", "--spider", "--no-check-certificate", "https://localhost:10443"]
+      test: ["CMD", "curl", "-sfk", "https://localhost:10443"]
       start_period: 60s
     logging: *default-logging
 
