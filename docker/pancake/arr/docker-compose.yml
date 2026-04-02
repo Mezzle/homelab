@@ -512,6 +512,7 @@ services:
       SCRYPTED_DOCKER_AVAHI: "true"
     volumes:
       - ./appdata/scrypted:/server/volume:z
+      - ./config/scrypted/avahi-daemon.conf:/etc/avahi/avahi-daemon.conf:ro,z
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "curl", "-sfk", "https://localhost:10443"]
