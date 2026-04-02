@@ -1,7 +1,7 @@
 .PHONY: up-all down-all restart-all status update-all backup-all help
 
 # All stacks to manage — add new stacks here as you create them
-STACKS := arr immich music infra observability
+STACKS := arr immich music infra
 
 up-all: ## Start all stacks
 	@for s in $(STACKS); do echo "=== Starting $$s ===" && $(MAKE) -C $$s up; done

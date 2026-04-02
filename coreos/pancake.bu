@@ -218,7 +218,7 @@ storage:
           echo "  Host: pancake (i7-5700HQ / 16GB / GTX 970M)"
           echo "  Tailscale: $(tailscale ip --4 || echo 'not connected')"
           echo "  Cockpit:   https://localhost:9090"
-          echo "  Stacks:    /srv/docker/pancake/{arr,immich,music,infra,observability}"
+          echo "  Stacks:    /srv/docker/pancake/{arr,immich,music,infra}"
           echo "  Commands:  make -C /srv/docker/pancake help"
           echo ""
           docker ps --format "  {{.Names}}\t{{.Status}}" 2>/dev/null | sort | head -20
@@ -472,31 +472,6 @@ systemd:
         [Install]
         WantedBy=multi-user.target
 
-    ##################################################################
-    # observability stack — auto-start on boot
-    ##################################################################
-    - name: observability-stack.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=Observability stack (docker compose)
-        After=docker.service network-online.target
-        Requires=docker.service
-        ConditionPathExists=/srv/docker/pancake/observability/docker-compose.yml
-
-        [Service]
-        Type=oneshot
-        RemainAfterExit=yes
-        WorkingDirectory=/srv/docker/pancake/observability
-        ExecStartPre=/usr/bin/docker compose pull --quiet
-        ExecStart=/usr/bin/docker compose up -d --remove-orphans
-        ExecStop=/usr/bin/docker compose down
-        TimeoutStartSec=300
-        User=mez
-        Group=mez
-
-        [Install]
-        WantedBy=multi-user.target
 
     ##################################################################
     # Weekly container image cleanup
@@ -580,7 +555,7 @@ systemd:
         [Service]
         Type=oneshot
         ExecStart=/bin/bash -c '\
-          for d in /srv/docker/pancake/arr /srv/docker/pancake/immich /srv/docker/pancake/music /srv/docker/pancake/infra /srv/docker/pancake/observability; do \
+          for d in /srv/docker/pancake/arr /srv/docker/pancake/immich /srv/docker/pancake/music /srv/docker/pancake/infra; do \
             [ -f "$$d/docker-compose.yml" ] && \
             echo "=== $$(basename $$d) ===" && \
             /usr/bin/docker compose -f $$d/docker-compose.yml pull --dry-run 2>&1 | grep -v "up to date"; \

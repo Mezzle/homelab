@@ -168,20 +168,6 @@ op item get "pancake/infra" --vault Homelab --fields label=TS_AUTHKEY,label=TAIL
 
 ---
 
-### `pancake/observability` — Prometheus + Alertmanager
-
-| Field | Example value | Notes |
-|---|---|---|
-| `DISCORD_WEBHOOK_URL` | `https://discord.com/api/webhooks/...` | For alert notifications |
-| `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | |
-
-```bash
-# Verify
-op item get "pancake/observability" --vault Homelab --fields label=DISCORD_WEBHOOK_URL,label=TS_AUTHKEY
-```
-
----
-
 ### `charm/infra` — Dockge agent
 
 | Field | Example value | Notes |
@@ -301,8 +287,6 @@ check "pancake/immich" IMMICH_VERSION NAS_HOST NAS_PHOTOS_SHARE NAS_PHOTOS_USER 
 check "pancake/music" TS_AUTHKEY
 check "pancake/infra" TS_AUTHKEY TAILNET SONARR_API_KEY RADARR_API_KEY \
   PROWLARR_API_KEY PLEX_TOKEN IMMICH_API_KEY ADGUARD_USER ADGUARD_PASS
-check "pancake/observability" DISCORD_WEBHOOK_URL TS_AUTHKEY
-
 check "charm/infra" TS_AUTHKEY
 
 check "charm/home" MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD \

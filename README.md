@@ -58,8 +58,7 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
 │   │   ├── arr/                     #     Media automation
 │   │   ├── immich/                  #     Photo management
 │   │   ├── music/                   #     Music Assistant
-│   │   ├── infra/                   #     Homepage + Dockge + Diun
-│   │   └── observability/           #     Prometheus + node-exporter + cAdvisor
+│   │   └── infra/                   #     Homepage + Dockge + Diun
 │   ├── charm/                 #   Mac Mini stacks
 │   │   ├── infra/                   #     Dockge agent
 │   │   ├── home/                    #     MQTT, cameras, Zigbee, MySQL

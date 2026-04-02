@@ -84,13 +84,6 @@
           type: uptimekuma
           url: https://uptime-kuma.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           slug: homelab
-    - Prometheus:
-        icon: prometheus.svg
-        href: https://prometheus.{{HOMEPAGE_VAR_TAILNET}}.ts.net
-        description: Metrics & alerting
-        widget:
-          type: prometheus
-          url: https://prometheus.{{HOMEPAGE_VAR_TAILNET}}.ts.net
     - Alertmanager:
         icon: alertmanager.svg
         href: https://alertmanager.{{HOMEPAGE_VAR_TAILNET}}.ts.net

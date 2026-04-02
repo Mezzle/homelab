@@ -490,6 +490,34 @@ services:
     logging: *default-logging
 
   ##########################################################################
+  # Scrypted — Ring cameras → HomeKit bridge
+  #
+  # 5 cameras: 3× Stick Up Cam Battery, 1× Stick Up Cam Plus Battery,
+  # 1× Doorbell Plus. Uses GPU for transcoding when available.
+  ##########################################################################
+  scrypted:
+    image: ghcr.io/koush/scrypted:latest
+    container_name: scrypted
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # Host network for HomeKit mDNS discovery
+    network_mode: host
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    environment:
+      <<: *common-env
+    volumes:
+      - ./appdata/scrypted:/server/volume:z
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:10443"]
+      start_period: 30s
+    logging: *default-logging
+
+  ##########################################################################
   # Tailscale sidecars — each service gets its own tailnet hostname
   # with automatic HTTPS via tailscale serve:
   #   https://sonarr.<tailnet>.ts.net   → Sonarr
@@ -557,6 +585,23 @@ services:
     volumes:
       - ./config/tailscale/bazarr/state:/var/lib/tailscale:z
       - ./config/tailscale/bazarr/serve.json:/config/serve.json:ro,z
+
+  ts-scrypted:
+    <<: *tailscale-sidecar
+    container_name: ts-scrypted
+    hostname: ts-scrypted
+    depends_on:
+      scrypted:
+        condition: service_healthy
+    extra_hosts:
+      - "host-gateway:host-gateway"
+    environment:
+      <<: *tailscale-env
+      TS_HOSTNAME: scrypted
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./config/tailscale/scrypted/state:/var/lib/tailscale:z
+      - ./config/tailscale/scrypted/serve.json:/config/serve.json:ro,z
 
   ts-plex:
     <<: *tailscale-sidecar

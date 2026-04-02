@@ -255,9 +255,7 @@ On **pancake**, Prometheus is configured to send alerts to `powder:9093`. Verify
 curl -s http://powder:9093/-/healthy
 # Should return: OK
 
-# Check Prometheus config is pointing to powder
-cat /srv/docker/pancake/observability/config/prometheus/prometheus.yml
-# Should show: targets: ['powder:9093'] as primary
+# Alertmanager on powder receives alerts from any future monitoring setup
 ```
 
 ## Step 7: Verify everything

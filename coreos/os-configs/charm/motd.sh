@@ -1,11 +1,11 @@
 #!/bin/bash
 echo ""
 echo "  uCore — $(rpm-ostree status --booted | grep -oP 'Version: \K\S+' || echo 'unknown')"
-echo "  Host: pancake (i7-5700HQ / 16GB / GTX 970M)"
+echo "  Host: charm (i5-4260U / 4GB)"
 echo "  Tailscale: $(tailscale ip --4 || echo 'not connected')"
 echo "  Cockpit:   https://localhost:9090"
-echo "  Stacks:    /srv/docker/pancake/{arr,immich,music,infra}"
-echo "  Commands:  make -C /srv/docker/pancake help"
+echo "  Stacks:    /srv/docker/charm/{infra,home,monitoring}"
+echo "  Commands:  make -C /srv/docker/charm help"
 echo ""
 docker ps --format "  {{.Names}}\t{{.Status}}" 2>/dev/null | sort | head -20
 TOTAL=$(docker ps -q 2>/dev/null | wc -l)

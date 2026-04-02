@@ -103,7 +103,6 @@ add_monitor "Immich"          "https://immich.${TAILNET}.ts.net"
 add_monitor "Music Assistant" "https://music.${TAILNET}.ts.net"
 add_monitor "Dockge"          "https://dockge.${TAILNET}.ts.net"
 add_monitor "Homepage"        "https://homepage.${TAILNET}.ts.net"
-add_monitor "Prometheus"      "https://prometheus.${TAILNET}.ts.net/-/healthy"
 
 # charm services
 add_monitor "Zigbee2MQTT"     "https://z2m.${TAILNET}.ts.net"
