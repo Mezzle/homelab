@@ -71,6 +71,9 @@ services:
       - home
     security_opt:
       - no-new-privileges:true
+    environment:
+      MQTT_USER: ${MQTT_USER:-homeassistant}
+      MQTT_PASS: ${MQTT_PASS}
     deploy:
       resources:
         limits:
@@ -84,7 +87,7 @@ services:
       - ./appdata/mosquitto/log:/mosquitto/log:z
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/broker/uptime", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      test: ["CMD-SHELL", "mosquitto_pub -t healthcheck -n -p 1883 -u \"$${MQTT_USER}\" -P \"$${MQTT_PASS}\""]
     logging: *default-logging
 
   ##########################################################################
