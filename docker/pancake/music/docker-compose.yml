@@ -1,7 +1,7 @@
 ##############################################################################
 # Music Assistant — music library management and streaming
 #
-# Uses host network for DLNA/Chromecast discovery.
+# Uses macvlan for a real LAN IP so DLNA/Chromecast mDNS discovery works.
 #
 # Required:
 #   - Copy .env.example to .env and fill in your values
@@ -54,12 +54,20 @@ x-tailscale-sidecar: &tailscale-sidecar
 networks:
   music:
     driver: bridge
+  # Macvlan — gives Music Assistant a real LAN IP for DLNA/Chromecast mDNS
+  lan:
+    driver: macvlan
+    driver_opts:
+      parent: enp3s0
+    ipam:
+      config:
+        - subnet: 192.168.4.0/22
+          gateway: 192.168.4.1
 
 services:
   ##########################################################################
   # Music Assistant
-  # Host network needed for DLNA/Chromecast discovery.
-  # If you don't use those, switch to bridge + ports.
+  # Macvlan gives it a real LAN IP for DLNA/Chromecast mDNS discovery.
   ##########################################################################
   music-assistant:
     image: ghcr.io/music-assistant/server:latest
@@ -67,8 +75,8 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    # network_mode: host overrides any networks: key — kept explicit
-    network_mode: host
+    networks:
+      - lan
     deploy:
       resources:
         limits:
@@ -91,11 +99,12 @@ services:
     <<: *tailscale-sidecar
     container_name: ts-music
     hostname: ts-music
+    networks:
+      - music
+      - lan
     depends_on:
       music-assistant:
         condition: service_healthy
-    extra_hosts:
-      - "host-gateway:host-gateway"
     environment:
       <<: *tailscale-env
       TS_HOSTNAME: music
