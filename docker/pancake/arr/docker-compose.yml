@@ -512,6 +512,7 @@ services:
       - no-new-privileges:true
     networks:
       - lan
+      - arr
     deploy:
       resources:
         limits:
@@ -600,9 +601,6 @@ services:
     <<: *tailscale-sidecar
     container_name: ts-scrypted
     hostname: ts-scrypted
-    networks:
-      - arr
-      - lan
     depends_on:
       scrypted:
         condition: service_healthy

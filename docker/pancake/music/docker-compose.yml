@@ -72,6 +72,7 @@ services:
       - no-new-privileges:true
     networks:
       - lan
+      - music
     deploy:
       resources:
         limits:
@@ -94,9 +95,6 @@ services:
     <<: *tailscale-sidecar
     container_name: ts-music
     hostname: ts-music
-    networks:
-      - music
-      - lan
     depends_on:
       music-assistant:
         condition: service_healthy
