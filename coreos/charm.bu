@@ -51,17 +51,9 @@ passwd:
 ########################################
 storage:
   directories:
-    # /srv is a symlink to /var/srv on FCOS — don't try to create it.
-    # Subdirectories are created under the symlink target automatically.
-
-    # Home stack directory
-    - path: /srv/docker/charm/home
-      mode: 0755
-      user: { name: mez }
-      group: { name: mez }
-
-    # Infra stack directory (Dockge agent)
-    - path: /srv/docker/charm/infra
+    # Repo root — /srv is a symlink to /var/srv on FCOS
+    # Don't create subdirectories here; git clone provides them
+    - path: /var/srv
       mode: 0755
       user: { name: mez }
       group: { name: mez }
