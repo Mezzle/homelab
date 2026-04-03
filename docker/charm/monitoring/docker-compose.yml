@@ -81,8 +81,8 @@ services:
       - 53:53/udp
       - 3000:3000
     volumes:
-      - ./appdata/adguard/work:/opt/adguardhome/work
-      - ./appdata/adguard/conf:/opt/adguardhome/conf
+      - ./appdata/adguard/work:/opt/adguardhome/work:z
+      - ./appdata/adguard/conf:/opt/adguardhome/conf:z
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
@@ -136,5 +136,5 @@ services:
       TS_HOSTNAME: adguard
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/adguard/state:/var/lib/tailscale
-      - ./config/tailscale/adguard/serve.json:/config/serve.json:ro
+      - ./config/tailscale/adguard/state:/var/lib/tailscale:z
+      - ./config/tailscale/adguard/serve.json:/config/serve.json:ro,z

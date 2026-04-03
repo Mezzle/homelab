@@ -82,9 +82,9 @@ services:
       <<: *common-env
       DOCKGE_STACKS_DIR: /stacks
     volumes:
-      - ./appdata/dockge:/app/data
+      - ./appdata/dockge:/app/data:z
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /srv/docker/charm:/stacks:ro
+      - /srv/docker/charm:/stacks:ro,z
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:5001"]
@@ -105,5 +105,5 @@ services:
       TS_HOSTNAME: dockge-charm
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/dockge/state:/var/lib/tailscale
-      - ./config/tailscale/dockge/serve.json:/config/serve.json:ro
+      - ./config/tailscale/dockge/state:/var/lib/tailscale:z
+      - ./config/tailscale/dockge/serve.json:/config/serve.json:ro,z
