@@ -77,6 +77,15 @@ networks:
   socket-proxy:
     driver: bridge
     internal: true
+  # Macvlan — gives containers a real IP on the LAN for mDNS/HomeKit
+  lan:
+    driver: macvlan
+    driver_opts:
+      parent: enp3s0
+    ipam:
+      config:
+        - subnet: 192.168.4.0/22
+          gateway: 192.168.4.1
 
 ##############################################################################
 # Volumes
@@ -501,8 +510,8 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    # Host network for HomeKit mDNS discovery
-    network_mode: host
+    networks:
+      - lan
     deploy:
       resources:
         limits:
@@ -512,7 +521,6 @@ services:
       SCRYPTED_DOCKER_AVAHI: "true"
     volumes:
       - ./appdata/scrypted:/server/volume:z
-      - ./config/scrypted/avahi-daemon.conf:/etc/avahi/avahi-daemon.conf:ro,z
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "curl", "-sfk", "https://localhost:10443"]
@@ -592,11 +600,12 @@ services:
     <<: *tailscale-sidecar
     container_name: ts-scrypted
     hostname: ts-scrypted
+    networks:
+      - arr
+      - lan
     depends_on:
       scrypted:
         condition: service_healthy
-    extra_hosts:
-      - "host-gateway:host-gateway"
     environment:
       <<: *tailscale-env
       TS_HOSTNAME: scrypted
