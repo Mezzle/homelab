@@ -2,3 +2,6 @@ homeassistant: true
 permit_join: false
 frontend:
   port: 8080
+serial:
+  adapter: ember
+  baudrate: 115200

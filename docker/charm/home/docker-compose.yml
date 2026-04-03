@@ -110,7 +110,11 @@ services:
     environment:
       <<: *common-env
       ZIGBEE2MQTT_CONFIG_SERIAL_PORT: tcp://${Z2M_ADAPTER_HOST}:${Z2M_ADAPTER_PORT:-6638}
+      ZIGBEE2MQTT_CONFIG_SERIAL_ADAPTER: ember
+      ZIGBEE2MQTT_CONFIG_SERIAL_BAUDRATE: "115200"
       ZIGBEE2MQTT_CONFIG_MQTT_SERVER: mqtt://mosquitto:1883
+      ZIGBEE2MQTT_CONFIG_MQTT_USER: ${MQTT_USER:-homeassistant}
+      ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD: ${MQTT_PASS}
     volumes:
       - ./appdata/z2m:/app/data:z
     depends_on:
