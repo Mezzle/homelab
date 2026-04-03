@@ -1,0 +1,4 @@
+homeassistant: true
+permit_join: false
+frontend:
+  port: 8080

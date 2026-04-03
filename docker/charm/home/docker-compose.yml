@@ -113,7 +113,7 @@ services:
       ZIGBEE2MQTT_CONFIG_MQTT_SERVER: mqtt://mosquitto:1883
     volumes:
       - ./appdata/z2m:/app/data:z
-      - ./config/z2m:/app/data/configuration.yaml:ro,z
+      - ./config/z2m/configuration.yaml:/app/data/configuration.yaml:ro,z
     depends_on:
       mosquitto:
         condition: service_healthy
