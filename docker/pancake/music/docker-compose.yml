@@ -54,15 +54,10 @@ x-tailscale-sidecar: &tailscale-sidecar
 networks:
   music:
     driver: bridge
-  # Macvlan — gives Music Assistant a real LAN IP for DLNA/Chromecast mDNS
+  # Macvlan — shared with arr stack for real LAN IPs (mDNS/Chromecast)
   lan:
-    driver: macvlan
-    driver_opts:
-      parent: enp3s0
-    ipam:
-      config:
-        - subnet: 192.168.4.0/22
-          gateway: 192.168.4.1
+    external: true
+    name: arr_lan
 
 services:
   ##########################################################################
