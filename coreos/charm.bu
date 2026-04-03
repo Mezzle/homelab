@@ -51,13 +51,8 @@ passwd:
 ########################################
 storage:
   directories:
-    # Repo root (cloned to /srv, docker/ subdir maps to /srv/docker/)
-    # overwrite: true needed because /srv is a symlink to /var/srv on stock FCOS
-    - path: /srv
-      mode: 0755
-      overwrite: true
-      user: { name: mez }
-      group: { name: mez }
+    # /srv is a symlink to /var/srv on FCOS — don't try to create it.
+    # Subdirectories are created under the symlink target automatically.
 
     # Home stack directory
     - path: /srv/docker/charm/home
