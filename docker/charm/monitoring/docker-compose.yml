@@ -56,28 +56,39 @@ x-tailscale-sidecar: &tailscale-sidecar
 networks:
   monitoring:
     driver: bridge
+  # Macvlan — gives AdGuard its own LAN IP so it can bind port 53
+  # without conflicting with systemd-resolved on the host
+  lan:
+    driver: macvlan
+    driver_opts:
+      parent: enp3s0f0
+    ipam:
+      config:
+        - subnet: 192.168.4.0/22
+          gateway: 192.168.4.1
 
 services:
   ##########################################################################
   # AdGuard Home — backup DNS instance
   # Kept in sync with the primary on the Raspberry Pi via adguard-sync
+  #
+  # Runs on macvlan with its own LAN IP so port 53 doesn't conflict
+  # with systemd-resolved on the host.
   ##########################################################################
   adguard:
     image: adguard/adguardhome:latest
     container_name: adguard
+    hostname: adguard-backup
     restart: unless-stopped
     networks:
-      - monitoring
+      monitoring:
+      lan:
     security_opt:
       - no-new-privileges:true
     deploy:
       resources:
         limits:
           memory: 128M
-    ports:
-      - 53:53/tcp
-      - 53:53/udp
-      - 3000:3000
     volumes:
       - ./appdata/adguard/work:/opt/adguardhome/work:z
       - ./appdata/adguard/conf:/opt/adguardhome/conf:z
