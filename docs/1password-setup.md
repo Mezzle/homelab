@@ -181,10 +181,12 @@ op item get "charm/infra" --vault Homelab --fields label=TS_AUTHKEY
 
 ---
 
-### `charm/home` — MQTT, cameras, Zigbee, MySQL
+### `charm/home` — MQTT, Zigbee, MySQL
 
 | Field | Example value | Notes |
 |---|---|---|
+| `MQTT_USER` | `homeassistant` | Mosquitto username |
+| `MQTT_PASS` | `mqttP4ssw0rd` | Mosquitto password |
 | `MYSQL_ROOT_PASSWORD` | `r00tP4ssw0rd` | Random string |
 | `MYSQL_DATABASE` | `homeassistant` | |
 | `MYSQL_USER` | `homeassistant` | |
@@ -195,12 +197,12 @@ op item get "charm/infra" --vault Homelab --fields label=TS_AUTHKEY
 
 ```bash
 # Verify
-op item get "charm/home" --vault Homelab --fields label=MYSQL_ROOT_PASSWORD,label=Z2M_ADAPTER_HOST,label=TS_AUTHKEY
+op item get "charm/home" --vault Homelab --fields label=MQTT_USER,label=MYSQL_ROOT_PASSWORD,label=Z2M_ADAPTER_HOST,label=TS_AUTHKEY
 ```
 
 ---
 
-### `charm/monitoring` — Uptime Kuma, AdGuard
+### `charm/monitoring` — AdGuard backup DNS
 
 | Field | Example value | Notes |
 |---|---|---|
@@ -235,12 +237,11 @@ op item get "powder/infra" --vault Homelab --fields label=TS_AUTHKEY
 
 | Field | Example value | Notes |
 |---|---|---|
-| `DISCORD_WEBHOOK_URL` | `https://discord.com/api/webhooks/...` | For Alertmanager → Discord |
 | `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | |
 
 ```bash
 # Verify
-op item get "powder/monitoring" --vault Homelab --fields label=DISCORD_WEBHOOK_URL,label=TS_AUTHKEY
+op item get "powder/monitoring" --vault Homelab --fields label=TS_AUTHKEY
 ```
 
 ---
@@ -289,14 +290,14 @@ check "pancake/infra" TS_AUTHKEY TAILNET SONARR_API_KEY RADARR_API_KEY \
   PROWLARR_API_KEY PLEX_TOKEN IMMICH_API_KEY ADGUARD_USER ADGUARD_PASS
 check "charm/infra" TS_AUTHKEY
 
-check "charm/home" MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD \
+check "charm/home" MQTT_USER MQTT_PASS MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD \
   Z2M_ADAPTER_HOST Z2M_ADAPTER_PORT TS_AUTHKEY
 
 check "charm/monitoring" ADGUARD_PRIMARY_URL ADGUARD_PRIMARY_USER ADGUARD_PRIMARY_PASS \
   ADGUARD_REPLICA_USER ADGUARD_REPLICA_PASS TS_AUTHKEY
 
 check "powder/infra" TS_AUTHKEY
-check "powder/monitoring" DISCORD_WEBHOOK_URL TS_AUTHKEY
+check "powder/monitoring" TS_AUTHKEY
 
 echo ""
 echo "Done. Fix any MISSING fields above, then run:"

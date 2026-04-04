@@ -6,8 +6,6 @@
 #
 # Services:
 #   - Uptime Kuma: monitors all homelab services over Tailscale
-#   - Alertmanager: receives alerts from Prometheus (on pancake) over
-#     Tailscale, routes to Discord. Survives pancake going down.
 #
 # Required:
 #   - Copy .env.example to .env and fill in your values

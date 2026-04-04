@@ -12,9 +12,10 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
 │  ┌─────────┐ ┌────────┐ ┌───────┐          │  │  ┌───────────┐ ┌──────────┐  │
 │  │   arr   │ │ immich │ │ music │          │  │  │   home    │ │monitoring│  │
 │  │ Plex    │ │ Photos │ │ Music │ ┌──────┐ │  │  │ Mosquitto │ │ AdGuard  │  │
-│  │ Sonarr  │ │ ML/GPU │ │ Asst  │ │infra │ │  │  │ Scrypted  │ │ AG Sync  │  │
-│  │ Radarr  │ │ Pgvec  │ │       │ │Dockge│ │  │  │ Z2M       │ │          │  │
-│  │ Prowlarr│ │ Redis  │ │       │ │ Diun │ │  │  │ MySQL     │ │          │  │
+│  │ Sonarr  │ │ ML/GPU │ │ Asst  │ │infra │ │  │  │ Z2M       │ │ AG Sync  │  │
+│  │ Radarr  │ │ Pgvec  │ │       │ │Dockge│ │  │  │ MySQL     │ │          │  │
+│  │ Prowlarr│ │ Redis  │ │       │ │ Diun │ │  │  │           │ │          │  │
+│  │Scrypted │ │        │ │       │ │      │ │  │  │           │ │          │  │
 │  │ +more   │ │        │ │       │ │      │ │  │  │           │ │          │  │
 │  └─────────┘ └────────┘ └───────┘ └──────┘ │  │  └───────────┘ └──────────┘  │
 │                                             │  │                              │
@@ -34,8 +35,8 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
    │           │  │                          │  │          │
    │ Uptime    │  └──────────────────────────┘  └──────────┘
    │  Kuma     │
-   │ Alert-    │
-   │  manager  │
+   │           │
+   │           │
    └───────────┘
      Oracle Cloud
      Always Free
@@ -61,11 +62,11 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
 │   │   └── infra/                   #     Homepage + Dockge + Diun
 │   ├── charm/                 #   Mac Mini stacks
 │   │   ├── infra/                   #     Dockge agent
-│   │   ├── home/                    #     MQTT, cameras, Zigbee, MySQL
+│   │   ├── home/                    #     MQTT, Zigbee, MySQL
 │   │   └── monitoring/              #     AdGuard + AG Sync
 │   └── powder/                #   Oracle Cloud stacks
 │       ├── infra/                   #     Dockge agent
-│       └── monitoring/              #     Uptime Kuma + Alertmanager
+│       └── monitoring/              #     Uptime Kuma
 ├── docs/
 │   ├── 1password-setup.md           #   Secrets reference & verification
 │   └── powder-setup.md              #   Oracle Cloud deployment guide
@@ -288,7 +289,7 @@ After deployment, all services are accessible via Tailscale with automatic HTTPS
 | Music Assistant | `https://music.<tailnet>.ts.net` |
 | Homepage | `https://homepage.<tailnet>.ts.net` |
 | Dockge | `https://dockge.<tailnet>.ts.net` |
-| Prometheus | `https://prometheus.<tailnet>.ts.net` |
+| Scrypted | `https://scrypted.<tailnet>.ts.net` |
 
 ### charm (mac mini)
 
@@ -296,7 +297,6 @@ After deployment, all services are accessible via Tailscale with automatic HTTPS
 |---|---|
 | Dockge (agent) | `https://dockge-charm.<tailnet>.ts.net` |
 | Zigbee2MQTT | `https://z2m.<tailnet>.ts.net` |
-| Scrypted | `https://scrypted.<tailnet>.ts.net` |
 | AdGuard Home | `https://adguard.<tailnet>.ts.net` |
 
 ### powder (Oracle Cloud — ARM)
@@ -305,7 +305,6 @@ After deployment, all services are accessible via Tailscale with automatic HTTPS
 |---|---|
 | Dockge (agent) | `https://dockge-powder.<tailnet>.ts.net` |
 | Uptime Kuma | `https://uptime-kuma.<tailnet>.ts.net` |
-| Alertmanager | `https://alertmanager.<tailnet>.ts.net` |
 
 ### Other
 

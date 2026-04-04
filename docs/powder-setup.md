@@ -2,7 +2,7 @@
 
 Step-by-step instructions for deploying powder (Oracle Cloud Always Free — Ampere A1).
 
-Powder runs external monitoring (Uptime Kuma + Alertmanager) and a Dockge agent, connected to the homelab via Tailscale.
+Powder runs external monitoring (Uptime Kuma) and a Dockge agent, connected to the homelab via Tailscale.
 
 ## Prerequisites
 
@@ -208,7 +208,6 @@ docker ps
 You should see:
 - `dockge` + `ts-dockge-powder` (infra)
 - `uptime-kuma` + `ts-uptime-kuma` (monitoring)
-- `alertmanager` + `ts-alertmanager` (monitoring)
 
 ## Step 6: Configure services
 
@@ -246,18 +245,6 @@ From the primary Dockge UI on pancake:
 3. URL: `ws://dockge-powder.<tailnet>.ts.net/terminal-socket`
 4. Powder's stacks should now appear in the Dockge UI
 
-### Alertmanager — verify Prometheus connectivity
-
-On **pancake**, Prometheus is configured to send alerts to `powder:9093`. Verify:
-
-```bash
-# From pancake
-curl -s http://powder:9093/-/healthy
-# Should return: OK
-
-# Alertmanager on powder receives alerts from any future monitoring setup
-```
-
 ## Step 7: Verify everything
 
 ```bash
@@ -272,7 +259,6 @@ systemctl status gitops-sync.timer
 
 # Check from your laptop
 curl -s https://uptime-kuma.<tailnet>.ts.net  # Should load
-curl -s https://alertmanager.<tailnet>.ts.net/-/healthy  # Should return OK
 curl -s https://dockge-powder.<tailnet>.ts.net  # Should load
 ```
 
@@ -308,6 +294,5 @@ powder (Oracle Cloud Always Free)
 ├── docker/powder/infra/
 │   └── Dockge (agent → managed from pancake)
 └── docker/powder/monitoring/
-    ├── Uptime Kuma (external monitoring of all services)
-    └── Alertmanager (receives alerts from Prometheus on pancake)
+    └── Uptime Kuma (external monitoring of all services)
 ```
