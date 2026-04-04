@@ -1,7 +1,8 @@
 {
 	"TCP": {
 		"1883": {
-			"HTTPS": false
+			"HTTPS": false,
+			"TCPForward": "mosquitto:1883"
 		}
 	}
 }
