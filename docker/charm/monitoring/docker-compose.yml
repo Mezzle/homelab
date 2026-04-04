@@ -142,7 +142,7 @@ services:
         condition: service_healthy
     environment:
       <<: *tailscale-env
-      TS_HOSTNAME: adguard
+      TS_HOSTNAME: adguard-backup
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
       - ./config/tailscale/adguard/state:/var/lib/tailscale:z
