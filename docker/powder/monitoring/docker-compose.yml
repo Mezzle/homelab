@@ -54,7 +54,7 @@ x-tailscale-sidecar: &tailscale-sidecar
     - /run
   healthcheck:
     <<: *healthcheck-defaults
-    test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9002/healthz"]
+    test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:9002/healthz" ]
   logging: *default-logging
 
 networks:
@@ -87,52 +87,7 @@ services:
       - ./appdata/uptime-kuma:/app/data:z
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "curl", "-f", "http://localhost:3001/"]
-    logging: *default-logging
-
-  ##########################################################################
-  # Alertmanager — receives alerts from Prometheus over Tailscale
-  #
-  # Prometheus (on pancake) sends alerts here. Because Alertmanager runs
-  # externally, in-flight alerts still fire even if pancake dies right
-  # after sending them.
-  #
-  # Prometheus config (on pancake) should point to:
-  #   alertmanagers:
-  #     - static_configs:
-  #         - targets: ['powder:9093']
-  ##########################################################################
-  alertmanager:
-    image: prom/alertmanager:latest
-    container_name: alertmanager
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - monitoring
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-    ports:
-      - 9093:9093
-    environment:
-      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        sed "s|DISCORD_WEBHOOK_PLACEHOLDER|$${DISCORD_WEBHOOK_URL}/slack|g" \
-          /etc/alertmanager/alertmanager.yml.tmpl > /tmp/alertmanager.yml
-        exec /bin/alertmanager \
-          --config.file=/tmp/alertmanager.yml \
-          --storage.path=/alertmanager \
-          --cluster.listen-address=""
-    volumes:
-      - ./config/alertmanager/alertmanager.yml.tmpl:/etc/alertmanager/alertmanager.yml.tmpl:ro,z
-      - ./appdata/alertmanager:/alertmanager:z
-    healthcheck:
-      <<: *healthcheck-defaults
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
+      test: [ "CMD", "curl", "-f", "http://localhost:3001/" ]
     logging: *default-logging
 
   ##########################################################################
@@ -153,17 +108,3 @@ services:
       - ./config/tailscale/uptime-kuma/state:/var/lib/tailscale:z
       - ./config/tailscale/uptime-kuma/serve.json:/config/serve.json:ro,z
 
-  ts-alertmanager:
-    <<: *tailscale-sidecar
-    container_name: ts-alertmanager
-    hostname: ts-alertmanager
-    depends_on:
-      alertmanager:
-        condition: service_healthy
-    environment:
-      <<: *tailscale-env
-      TS_HOSTNAME: alertmanager
-      TS_SERVE_CONFIG: /config/serve.json
-    volumes:
-      - ./config/tailscale/alertmanager/state:/var/lib/tailscale:z
-      - ./config/tailscale/alertmanager/serve.json:/config/serve.json:ro,z
