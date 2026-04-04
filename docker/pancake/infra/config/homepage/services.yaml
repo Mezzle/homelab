@@ -84,7 +84,3 @@
           type: uptimekuma
           url: https://uptime-kuma.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           slug: homelab
-    - Alertmanager:
-        icon: alertmanager.svg
-        href: https://alertmanager.{{HOMEPAGE_VAR_TAILNET}}.ts.net
-        description: Alert routing (powder)

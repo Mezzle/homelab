@@ -20,6 +20,9 @@
 # Ignition files (generated from .bu)
 coreos/*.ign
 
+# Python virtualenvs
+**/.venv/
+
 # OS junk
 .DS_Store
 Thumbs.db

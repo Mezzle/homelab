@@ -223,18 +223,22 @@ You should see:
 4. **Seed all monitors** (from powder, or any machine with access):
 
 ```bash
-# Install jq if needed
-sudo rpm-ostree install jq && sudo systemctl reboot
+# Install the Python API client (Uptime Kuma uses Socket.IO, not REST)
+pip3 install uptime-kuma-api
 
-# Or run from your laptop
+# Run from your laptop or from powder
 cd /srv/docker/powder/monitoring
 UPK_USER=<your-utk-username> \
 UPK_PASS=<your-utk-password> \
 TAILNET=<your-tailnet> \
 ./scripts/seed-uptime-kuma.sh
+
+# Optional: pass MQTT/MySQL creds for deeper checks
+# MQTT_USER=... MQTT_PASS=... MYSQL_USER=... MYSQL_PASS=... \
 ```
 
-This creates monitors for all services + host ping checks.
+This creates monitors for all services including keyword/JSON validation,
+MQTT broker checks, DNS resolution tests, and Tailscale ping.
 
 ### Connect Dockge to the primary
 
