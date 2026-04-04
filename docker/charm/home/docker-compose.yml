@@ -93,37 +93,37 @@ services:
   ##########################################################################
   # Zigbee2MQTT — Zigbee coordinator (network adapter)
   ##########################################################################
-  z2m:
-    image: koenkk/zigbee2mqtt:latest
-    container_name: z2m
-    restart: unless-stopped
-    networks:
-      - home
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-    ports:
-      - 8080:8080
-    environment:
-      <<: *common-env
-      ZIGBEE2MQTT_CONFIG_SERIAL_PORT: tcp://${Z2M_ADAPTER_HOST}:${Z2M_ADAPTER_PORT:-6638}
-      ZIGBEE2MQTT_CONFIG_SERIAL_ADAPTER: ember
-      ZIGBEE2MQTT_CONFIG_SERIAL_BAUDRATE: "115200"
-      ZIGBEE2MQTT_CONFIG_MQTT_SERVER: mqtt://mosquitto:1883
-      ZIGBEE2MQTT_CONFIG_MQTT_USER: ${MQTT_USER:-homeassistant}
-      ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD: ${MQTT_PASS}
-    volumes:
-      - ./appdata/z2m:/app/data:z
-    depends_on:
-      mosquitto:
-        condition: service_healthy
-    healthcheck:
-      <<: *healthcheck-defaults
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080"]
-    logging: *default-logging
+#  z2m:
+#    image: koenkk/zigbee2mqtt:latest
+#    container_name: z2m
+#    restart: unless-stopped
+#    networks:
+#      - home
+#    security_opt:
+#      - no-new-privileges:true
+#    deploy:
+#      resources:
+#        limits:
+#          memory: 256M
+#    ports:
+#      - 8080:8080
+#    environment:
+#      <<: *common-env
+#      ZIGBEE2MQTT_CONFIG_SERIAL_PORT: tcp://${Z2M_ADAPTER_HOST}:${Z2M_ADAPTER_PORT:-6638}
+#      ZIGBEE2MQTT_CONFIG_SERIAL_ADAPTER: ember
+#      ZIGBEE2MQTT_CONFIG_SERIAL_BAUDRATE: "115200"
+#      ZIGBEE2MQTT_CONFIG_MQTT_SERVER: mqtt://mosquitto:1883
+#      ZIGBEE2MQTT_CONFIG_MQTT_USER: ${MQTT_USER:-homeassistant}
+#      ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD: ${MQTT_PASS}
+#    volumes:
+#      - ./appdata/z2m:/app/data:z
+#    depends_on:
+#      mosquitto:
+#        condition: service_healthy
+#    healthcheck:
+#      <<: *healthcheck-defaults
+#      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080"]
+#    logging: *default-logging
 
   ##########################################################################
   # MySQL — database for Home Assistant
@@ -178,17 +178,17 @@ services:
       - ./config/tailscale/mosquitto/state:/var/lib/tailscale:z
       - ./config/tailscale/mosquitto/serve.json:/config/serve.json:ro,z
 
-  ts-z2m:
-    <<: *tailscale-sidecar
-    container_name: ts-z2m
-    hostname: ts-z2m
-    depends_on:
-      z2m:
-        condition: service_healthy
-    environment:
-      <<: *tailscale-env
-      TS_HOSTNAME: z2m
-      TS_SERVE_CONFIG: /config/serve.json
-    volumes:
-      - ./config/tailscale/z2m/state:/var/lib/tailscale:z
-      - ./config/tailscale/z2m/serve.json:/config/serve.json:ro,z
+#  ts-z2m:
+#    <<: *tailscale-sidecar
+#    container_name: ts-z2m
+#    hostname: ts-z2m
+#    depends_on:
+#      z2m:
+#        condition: service_healthy
+#    environment:
+#      <<: *tailscale-env
+#      TS_HOSTNAME: z2m
+#      TS_SERVE_CONFIG: /config/serve.json
+#    volumes:
+#      - ./config/tailscale/z2m/state:/var/lib/tailscale:z
+#      - ./config/tailscale/z2m/serve.json:/config/serve.json:ro,z
