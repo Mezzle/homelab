@@ -64,11 +64,14 @@ networks:
     driver: macvlan
     driver_opts:
       parent: enp3s0f0
+    enable_ipv6: true
     ipam:
       config:
         - subnet: 192.168.4.0/22
           gateway: 192.168.4.1
           ip_range: 192.168.7.224/27
+        - subnet: fd6c:1476:be01:1::/64
+          ip_range: fd6c:1476:be01:1:d0c:a000::/96
 
 services:
   ##########################################################################
