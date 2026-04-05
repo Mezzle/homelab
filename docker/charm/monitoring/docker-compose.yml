@@ -57,7 +57,9 @@ networks:
   monitoring:
     driver: bridge
   # Macvlan — gives AdGuard its own LAN IP so it can bind port 53
-  # without conflicting with systemd-resolved on the host
+  # without conflicting with systemd-resolved on the host.
+  # ip_range constrains Docker's IPAM to a separate slice from pancake
+  # so macvlan IPs won't collide across hosts.
   lan:
     driver: macvlan
     driver_opts:
@@ -66,6 +68,7 @@ networks:
       config:
         - subnet: 192.168.4.0/22
           gateway: 192.168.4.1
+          ip_range: 192.168.7.224/27
 
 services:
   ##########################################################################

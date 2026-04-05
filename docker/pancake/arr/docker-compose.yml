@@ -77,7 +77,9 @@ networks:
   socket-proxy:
     driver: bridge
     internal: true
-  # Macvlan — gives containers a real IP on the LAN for mDNS/HomeKit
+  # Macvlan — gives containers a real IP on the LAN for mDNS/HomeKit.
+  # ip_range constrains Docker's IPAM to the top of the /22 so it won't
+  # collide with eero's DHCP pool (which can't be configured).
   lan:
     driver: macvlan
     driver_opts:
@@ -86,6 +88,7 @@ networks:
       config:
         - subnet: 192.168.4.0/22
           gateway: 192.168.4.1
+          ip_range: 192.168.7.192/27
 
 ##############################################################################
 # Volumes
