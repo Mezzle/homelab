@@ -94,7 +94,7 @@ services:
       - ./appdata/adguard/conf:/opt/adguardhome/conf:z
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
     logging: *default-logging
 
   ##########################################################################
