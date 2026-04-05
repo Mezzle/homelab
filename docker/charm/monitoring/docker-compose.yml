@@ -94,7 +94,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 256M
     volumes:
       - ./appdata/adguard/work:/opt/adguardhome/work:z
       - ./appdata/adguard/conf:/opt/adguardhome/conf:z
