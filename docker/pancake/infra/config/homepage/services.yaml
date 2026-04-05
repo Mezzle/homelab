@@ -61,13 +61,13 @@
         description: DNS filtering
         widget:
           type: adguard
-          url: https://ag.67l.uk
+          url: https://pihole.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           username: "{{HOMEPAGE_VAR_ADGUARD_USER}}"
           password: "{{HOMEPAGE_VAR_ADGUARD_PASS}}"
-    - Zigbee2MQTT:
-        icon: zigbee2mqtt.svg
-        href: https://z2m.{{HOMEPAGE_VAR_TAILNET}}.ts.net
-        description: Zigbee bridge
+#    - Zigbee2MQTT:
+#        icon: zigbee2mqtt.svg
+#        href: https://z2m.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+#        description: Zigbee bridge
 
 - Infrastructure:
     - Dockge:
