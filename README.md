@@ -84,7 +84,7 @@ stack-name/
 ├── docker-compose.yml        # The stack definition
 ├── .env.example              # Template for secrets (committed)
 ├── .env                      # Actual secrets (git-ignored)
-├── Makefile                  # make up/down/logs/status/etc
+├── stack.sh                  # ./stack.sh up/down/logs/status/etc
 ├── appdata/                  # Container data (git-ignored)
 ├── config/                   # Config files (committed)
 │   └── tailscale/            # Tailscale serve configs
@@ -116,8 +116,8 @@ cd ../immich && cp .env.example .env && vim .env
 # ... repeat for each stack
 
 # 6. Start everything
-make -C docker/pancake/arr up
-make -C docker/pancake/immich up
+docker/pancake/arr/stack.sh up
+docker/pancake/immich/stack.sh up
 # ... or use the systemd services (they auto-start on boot)
 ```
 
@@ -125,8 +125,8 @@ make -C docker/pancake/immich up
 
 ```bash
 # On the server
-make -C docker/pancake/arr status     # Check a stack
-make -C docker/pancake/arr logs s=sonarr  # Tail specific service logs
+docker/pancake/arr/stack.sh status            # Check a stack
+docker/pancake/arr/stack.sh logs sonarr       # Tail specific service logs
 
 # From your laptop (push-to-deploy)
 vim docker/pancake/arr/docker-compose.yml  # Edit
@@ -164,9 +164,9 @@ services:
 SOME_SECRET=change-me
 ```
 
-### 4. (Optional) Add a Makefile
+### 4. (Optional) Add a stack.sh
 
-Copy any existing stack's Makefile — they're all identical except the project name in `status:`.
+Copy any existing stack's `stack.sh` — they're all identical except the project name in `status`.
 
 ### 5. (Optional) Add Tailscale access
 

@@ -195,11 +195,11 @@ The systemd units should auto-start the stacks if the compose files exist. If th
 
 ```bash
 # Start everything
-make -C /srv/docker/powder up-all
+/srv/docker/powder/stacks.sh up-all
 
 # Or individually
-make -C /srv/docker/powder/infra up
-make -C /srv/docker/powder/monitoring up
+/srv/docker/powder/infra/stack.sh up
+/srv/docker/powder/monitoring/stack.sh up
 
 # Verify
 docker ps
@@ -273,11 +273,11 @@ curl -s https://uptime-kuma.<tailnet>.ts.net  # Should load
 ssh mez@powder
 
 # Check stack status
-make -C /srv/docker/powder status
+/srv/docker/powder/stacks.sh status
 
 # View logs
-make -C /srv/docker/powder/monitoring logs
-make -C /srv/docker/powder/monitoring logs s=uptime-kuma
+/srv/docker/powder/monitoring/stack.sh logs
+/srv/docker/powder/monitoring/stack.sh logs uptime-kuma
 
 # Update OS
 rpm-ostree upgrade && sudo systemctl reboot

@@ -11,7 +11,7 @@
 #   - Place your seedbox SSH key at ./config/seedbox/id_rsa (or adjust path)
 #   - Generate a Tailscale auth key at https://login.tailscale.com/admin/settings/keys
 #     (reusable + ephemeral recommended)
-#   - After first boot, run: make bootstrap
+#   - After first boot, run: ./stack.sh bootstrap
 ##############################################################################
 
 ##############################################################################
@@ -431,7 +431,7 @@ services:
   # Backup — scheduled backups of app configs/databases to NAS
   #
   # Runs daily at 03:00. Backs up SQLite databases safely and keeps
-  # 7 days of backups. Manual trigger: make backup
+  # 7 days of backups. Manual trigger: ./stack.sh backup
   ##########################################################################
   backup:
     image: alpine:3.21
