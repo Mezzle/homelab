@@ -13,7 +13,7 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
 │  │   arr   │ │ immich │ │ music │          │  │  │   home    │ │monitoring│  │
 │  │ Plex    │ │ Photos │ │ Music │ ┌──────┐ │  │  │ Mosquitto │ │ AdGuard  │  │
 │  │ Sonarr  │ │ ML/GPU │ │ Asst  │ │infra │ │  │  │ Z2M       │ │ AG Sync  │  │
-│  │ Radarr  │ │ Pgvec  │ │       │ │Dockge│ │  │  │ MySQL     │ │          │  │
+│  │ Radarr  │ │ Pgvec  │ │       │ │Porta-│ │  │  │ MySQL     │ │          │  │
 │  │ Prowlarr│ │ Redis  │ │       │ │ Diun │ │  │  │           │ │          │  │
 │  │Scrypted │ │        │ │       │ │      │ │  │  │           │ │          │  │
 │  │ +more   │ │        │ │       │ │      │ │  │  │           │ │          │  │
@@ -59,13 +59,13 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
 │   │   ├── arr/                     #     Media automation
 │   │   ├── immich/                  #     Photo management
 │   │   ├── music/                   #     Music Assistant
-│   │   └── infra/                   #     Homepage + Dockge + Diun
+│   │   └── infra/                   #     Homepage + Portainer + Diun
 │   ├── charm/                 #   Mac Mini stacks
-│   │   ├── infra/                   #     Dockge agent
+│   │   ├── infra/                   #     Portainer agent
 │   │   ├── home/                    #     MQTT, Zigbee, MySQL
 │   │   └── monitoring/              #     AdGuard + AG Sync
 │   └── powder/                #   Oracle Cloud stacks
-│       ├── infra/                   #     Dockge agent
+│       ├── infra/                   #     Portainer agent
 │       └── monitoring/              #     Uptime Kuma
 ├── docs/
 │   ├── 1password-setup.md           #   Secrets reference & verification
@@ -185,9 +185,9 @@ cd /srv/docker/pancake/my-new-stack  # /srv is the repo root
 cp .env.example .env && vim .env
 docker compose up -d
 
-# Option C: Via Dockge UI
-# Navigate to https://dockge.<tailnet>.ts.net
-# Dockge can see /srv/docker/* and manage stacks from the web UI
+# Option C: Via Portainer UI
+# Navigate to https://portainer.<tailnet>.ts.net
+# Portainer can manage containers/stacks from the web UI
 ```
 
 ### Where to store data
@@ -199,16 +199,14 @@ docker compose up -d
 | **Secrets** | `.env` file (git-ignored) | Never committed. See 1Password section below. |
 | **Container config** | `./config/` (committed) | Versioned, deployed via git |
 
-### What about Dockge / Portainer?
+### What about Portainer?
 
-**Dockge** is included in the `infra` stack. It mounts `/srv/docker` read-only so it can see all stacks on this server. Use it for:
+**Portainer** is included in the `infra` stack. Use it for:
 - Viewing container status, logs, and resource usage
 - Quick restarts or pulls when you don't want to SSH in
-- Browsing compose files
+- Managing containers across all three servers from a single UI
 
-**Don't use Dockge as the source of truth** — the git repo is. If you edit a compose file in Dockge, the next gitops-sync will overwrite it. Edit in git, push, let it deploy.
-
-If you prefer Portainer, swap it in for Dockge in the infra stack. Same principle applies: use it for visibility, not as the config source.
+**Don't use Portainer as the source of truth** — the git repo is. If you edit a compose file in Portainer, the next gitops-sync will overwrite it. Edit in git, push, let it deploy.
 
 ### Launching ad-hoc containers
 
@@ -224,7 +222,7 @@ cd /srv/docker/scratch/my-experiment
 # compose file here — it won't be in git, won't be synced
 ```
 
-The `scratch/` directory isn't part of any server's stack tree, so gitops-sync ignores it. Dockge will still see it.
+The `scratch/` directory isn't part of any server's stack tree, so gitops-sync ignores it.
 
 ## Secrets management with 1Password
 
@@ -288,14 +286,14 @@ After deployment, all services are accessible via Tailscale with automatic HTTPS
 | Immich | `https://immich.<tailnet>.ts.net` |
 | Music Assistant | `https://music.<tailnet>.ts.net` |
 | Homepage | `https://homepage.<tailnet>.ts.net` |
-| Dockge | `https://dockge.<tailnet>.ts.net` |
+| Portainer | `https://portainer.<tailnet>.ts.net` |
 | Scrypted | `https://scrypted.<tailnet>.ts.net` |
 
 ### charm (mac mini)
 
 | Service | Tailnet URL |
 |---|---|
-| Dockge (agent) | `https://dockge-charm.<tailnet>.ts.net` |
+| Portainer (agent) | `portainer-charm.<tailnet>.ts.net:9001` |
 | Zigbee2MQTT | `https://z2m.<tailnet>.ts.net` |
 | AdGuard Home | `https://adguard.<tailnet>.ts.net` |
 
@@ -303,7 +301,7 @@ After deployment, all services are accessible via Tailscale with automatic HTTPS
 
 | Service | Tailnet URL |
 |---|---|
-| Dockge (agent) | `https://dockge-powder.<tailnet>.ts.net` |
+| Portainer (agent) | `portainer-powder.<tailnet>.ts.net:9001` |
 | Uptime Kuma | `https://uptime-kuma.<tailnet>.ts.net` |
 
 ### Other

@@ -2,7 +2,7 @@
 
 Step-by-step instructions for deploying powder (Oracle Cloud Always Free — Ampere A1).
 
-Powder runs external monitoring (Uptime Kuma) and a Dockge agent, connected to the homelab via Tailscale.
+Powder runs external monitoring (Uptime Kuma) and a Portainer agent, connected to the homelab via Tailscale.
 
 ## Prerequisites
 
@@ -206,7 +206,7 @@ docker ps
 ```
 
 You should see:
-- `dockge` + `ts-dockge-powder` (infra)
+- `portainer-agent` + `ts-portainer-powder` (infra)
 - `uptime-kuma` + `ts-uptime-kuma` (monitoring)
 
 ## Step 6: Configure services
@@ -240,14 +240,14 @@ TAILNET=<your-tailnet> \
 This creates monitors for all services including keyword/JSON validation,
 MQTT broker checks, DNS resolution tests, and Tailscale ping.
 
-### Connect Dockge to the primary
+### Connect Portainer to the primary
 
-From the primary Dockge UI on pancake:
+From the primary Portainer UI on pancake:
 
-1. Open https://dockge.\<tailnet\>.ts.net
-2. Go to **Settings → Agents → Add Agent**
-3. URL: `ws://dockge-powder.<tailnet>.ts.net/terminal-socket`
-4. Powder's stacks should now appear in the Dockge UI
+1. Open https://portainer.\<tailnet\>.ts.net
+2. Go to **Environments → Add Environment → Agent**
+3. URL: `portainer-powder.<tailnet>.ts.net:9001`
+4. Powder's containers should now appear in the Portainer UI
 
 ## Step 7: Verify everything
 
@@ -263,7 +263,7 @@ systemctl status gitops-sync.timer
 
 # Check from your laptop
 curl -s https://uptime-kuma.<tailnet>.ts.net  # Should load
-curl -s https://dockge-powder.<tailnet>.ts.net  # Should load
+# Portainer agent is TCP on port 9001, not HTTPS
 ```
 
 ## Ongoing maintenance
@@ -296,7 +296,7 @@ powder (Oracle Cloud Always Free)
 ├── uCore (Fedora CoreOS + Docker + Tailscale + Cockpit)
 ├── Tailscale exit node
 ├── docker/powder/infra/
-│   └── Dockge (agent → managed from pancake)
+│   └── Portainer Agent (managed from pancake)
 └── docker/powder/monitoring/
     └── Uptime Kuma (external monitoring of all services)
 ```

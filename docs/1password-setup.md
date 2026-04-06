@@ -147,7 +147,7 @@ op item get "pancake/music" --vault Homelab --fields label=TS_AUTHKEY
 
 ---
 
-### `pancake/infra` — Homepage + Dockge + Diun
+### `pancake/infra` — Homepage + Portainer + Diun
 
 | Field | Example value | Notes |
 |---|---|---|
@@ -168,7 +168,7 @@ op item get "pancake/infra" --vault Homelab --fields label=TS_AUTHKEY,label=TAIL
 
 ---
 
-### `charm/infra` — Dockge agent
+### `charm/infra` — Portainer agent
 
 | Field | Example value | Notes |
 |---|---|---|
@@ -220,7 +220,7 @@ op item get "charm/monitoring" --vault Homelab --fields label=ADGUARD_PRIMARY_UR
 
 ---
 
-### `powder/infra` — Dockge agent
+### `powder/infra` — Portainer agent
 
 | Field | Example value | Notes |
 |---|---|---|

@@ -131,8 +131,8 @@ GROUPS: dict[str, list[dict]] = {
         ),
         dict(
             type=MonitorType.HTTP,
-            name="Dockge",
-            url=f"https://dockge.{TS}",
+            name="Portainer",
+            url=f"https://portainer.{TS}",
             interval=60,
         ),
         dict(
@@ -168,9 +168,10 @@ GROUPS: dict[str, list[dict]] = {
             interval=60,
         ),
         dict(
-            type=MonitorType.HTTP,
-            name="Dockge (charm)",
-            url=f"https://dockge-charm.{TS}",
+            type=MonitorType.PORT,
+            name="Portainer Agent (charm)",
+            hostname=f"portainer-charm.{TS}",
+            port=9001,
             interval=60,
         ),
         dict(
@@ -192,9 +193,10 @@ GROUPS: dict[str, list[dict]] = {
             interval=60,
         ),
         dict(
-            type=MonitorType.HTTP,
-            name="Dockge (powder)",
-            url=f"https://dockge-powder.{TS}",
+            type=MonitorType.PORT,
+            name="Portainer Agent (powder)",
+            hostname=f"portainer-powder.{TS}",
+            port=9001,
             interval=60,
         ),
         dict(

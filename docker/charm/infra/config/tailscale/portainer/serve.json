@@ -1,0 +1,8 @@
+{
+	"TCP": {
+		"9001": {
+			"HTTPS": false,
+			"TCPForward": "portainer-agent:9001"
+		}
+	}
+}

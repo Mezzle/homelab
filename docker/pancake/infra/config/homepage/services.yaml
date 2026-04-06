@@ -70,10 +70,15 @@
 #        description: Zigbee bridge
 
 - Infrastructure:
-    - Dockge:
-        icon: dockge.svg
-        href: https://dockge.{{HOMEPAGE_VAR_TAILNET}}.ts.net
-        description: Docker compose UI
+    - Portainer:
+        icon: portainer.svg
+        href: https://portainer.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+        description: Docker management
+        widget:
+          type: portainer
+          url: https://portainer.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+          env: 1
+          key: "{{HOMEPAGE_VAR_PORTAINER_API_KEY}}"
 
 - Monitoring:
     - Uptime Kuma:

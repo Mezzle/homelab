@@ -1,10 +1,8 @@
 ##############################################################################
-# Infrastructure stack — Dockge (compose UI) + Diun (image update notifier)
+# Infrastructure stack — Portainer (Docker UI) + Diun (image update notifier)
 #
-# Dockge manages compose stacks via a web UI. It can view and control
-# stacks in /srv/docker/pancake/* but the gitops-sync handles deployments —
-# use Dockge for visibility and ad-hoc management, not as the source
-# of truth.
+# Portainer manages Docker containers/stacks via a web UI. Remote agents
+# on charm and powder are connected over Tailscale.
 #
 # Diun watches all running containers for image updates and notifies
 # via webhook/email/etc.
@@ -63,11 +61,16 @@ networks:
 
 services:
   ##########################################################################
-  # Dockge — Docker Compose management UI
+  # Portainer — Docker management UI
+  #
+  # Connect remote agents from the UI:
+  #   Environments → Add → Agent
+  #   URL: portainer-charm.<tailnet>.ts.net:9001
+  #   URL: portainer-powder.<tailnet>.ts.net:9001
   ##########################################################################
-  dockge:
-    image: louislam/dockge:latest
-    container_name: dockge
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
     restart: unless-stopped
     networks:
       - infra
@@ -78,20 +81,16 @@ services:
         limits:
           memory: 256M
     ports:
-      - 5001:5001
+      - 9443:9443
     environment:
       <<: *common-env
-      DOCKGE_STACKS_DIR: /stacks
     volumes:
-      - ./appdata/dockge:/app/data
+      - ./appdata/portainer:/data
       - /var/run/docker.sock:/var/run/docker.sock
-      - /usr/bin/docker:/usr/bin/docker:ro
-      - /usr/libexec/docker/cli-plugins:/usr/libexec/docker/cli-plugins:ro
-      # Mount the server's stacks directory so Dockge can see all stacks
-      - /srv/docker/pancake:/stacks
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5001', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      test: ["CMD", "wget", "-q", "--spider", "--no-check-certificate", "https://localhost:9443"]
+      start_period: 30s
     logging: *default-logging
 
   ##########################################################################
@@ -188,17 +187,17 @@ services:
       - ./config/tailscale/homepage/state:/var/lib/tailscale:z
       - ./config/tailscale/homepage/serve.json:/config/serve.json:ro,z
 
-  ts-dockge:
+  ts-portainer:
     <<: *tailscale-sidecar
-    container_name: ts-dockge
-    hostname: ts-dockge
+    container_name: ts-portainer
+    hostname: ts-portainer
     depends_on:
-      dockge:
+      portainer:
         condition: service_healthy
     environment:
       <<: *tailscale-env
-      TS_HOSTNAME: dockge
+      TS_HOSTNAME: portainer
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ./config/tailscale/dockge/state:/var/lib/tailscale:z
-      - ./config/tailscale/dockge/serve.json:/config/serve.json:ro,z
+      - ./config/tailscale/portainer/state:/var/lib/tailscale:z
+      - ./config/tailscale/portainer/serve.json:/config/serve.json:ro,z
