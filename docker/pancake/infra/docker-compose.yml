@@ -69,7 +69,7 @@ services:
   #   URL: portainer-powder.<tailnet>.ts.net:9001
   ##########################################################################
   portainer:
-    image: portainer/portainer-ce:latest
+    image: portainer/portainer-ce:alpine
     container_name: portainer
     restart: unless-stopped
     networks:
@@ -89,8 +89,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "wget", "-q", "--spider", "--no-check-certificate", "https://localhost:9443"]
-      start_period: 30s
+      test: ["CMD", "wget", "--no-verbose", "--tries=3", "--spider", "http://127.0.0.1:9000/api/system/status"]
     logging: *default-logging
 
   ##########################################################################
