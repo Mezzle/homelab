@@ -128,6 +128,7 @@ services:
       HOMEPAGE_VAR_ADGUARD_USER: ${ADGUARD_USER:-admin}
       HOMEPAGE_VAR_ADGUARD_PASS: ${ADGUARD_PASS:-}
       HOMEPAGE_ALLOWED_HOSTS: ${HOMEPAGE_ALLOWED_HOSTS:-localhost,homepage.${TAILNET}.ts.net}
+      HOMEPAGE_VAR_PORTAINER_API_KEY: ${PORTAINER_API_KEY:-}
     volumes:
       - ./config/homepage:/app/config:z
       - /var/run/docker.sock:/var/run/docker.sock:ro
