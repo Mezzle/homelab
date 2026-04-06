@@ -70,7 +70,7 @@
 #        description: Zigbee bridge
 
 - Infrastructure:
-    - Portainer:
+    - Portainer (Pancake):
         icon: portainer.svg
         href: https://portainer.{{HOMEPAGE_VAR_TAILNET}}.ts.net
         description: Docker management
@@ -78,6 +78,24 @@
           type: portainer
           url: https://portainer.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           env: 3
+          key: "{{HOMEPAGE_VAR_PORTAINER_API_KEY}}"
+    - Portainer (Charm):
+        icon: portainer.svg
+        href: https://portainer.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+        description: Docker management
+        widget:
+          type: portainer
+          url: https://portainer.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+          env: 4
+          key: "{{HOMEPAGE_VAR_PORTAINER_API_KEY}}"
+    - Portainer (Powder):
+        icon: portainer.svg
+        href: https://portainer.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+        description: Docker management
+        widget:
+          type: portainer
+          url: https://portainer.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+          env: 5
           key: "{{HOMEPAGE_VAR_PORTAINER_API_KEY}}"
 
 - Monitoring:
