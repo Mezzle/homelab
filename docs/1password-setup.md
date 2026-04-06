@@ -168,6 +168,20 @@ op item get "pancake/infra" --vault Homelab --fields label=TS_AUTHKEY,label=TAIL
 
 ---
 
+### `pancake/speedtest` — Speedtest Tracker
+
+| Field | Example value | Notes |
+|---|---|---|
+| `APP_KEY` | `base64:xxxxxxxx...` | Generate: `echo "base64:$(openssl rand -base64 32)"` |
+| `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | |
+
+```bash
+# Verify
+op item get "pancake/speedtest" --vault Homelab --fields label=APP_KEY,label=TS_AUTHKEY
+```
+
+---
+
 ### `charm/infra` — Portainer agent
 
 | Field | Example value | Notes |
@@ -286,6 +300,7 @@ check "pancake/immich" IMMICH_VERSION NAS_HOST NAS_PHOTOS_SHARE NAS_PHOTOS_USER 
   IMMICH_TRANSCODING_BACKEND IMMICH_ML_BACKEND IMMICH_ML_IMAGE_SUFFIX TS_AUTHKEY
 
 check "pancake/music" TS_AUTHKEY
+check "pancake/speedtest" APP_KEY TS_AUTHKEY
 check "pancake/infra" TS_AUTHKEY TAILNET SONARR_API_KEY RADARR_API_KEY \
   PROWLARR_API_KEY PLEX_TOKEN IMMICH_API_KEY ADGUARD_USER ADGUARD_PASS
 check "charm/infra" TS_AUTHKEY

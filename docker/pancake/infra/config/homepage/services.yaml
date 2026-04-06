@@ -99,6 +99,10 @@
           key: "{{HOMEPAGE_VAR_PORTAINER_API_KEY}}"
 
 - Monitoring:
+    - Speedtest Tracker:
+        icon: speedtest-tracker.svg
+        href: https://speedtest.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+        description: Internet speed monitoring
     - Uptime Kuma:
         icon: uptime-kuma.svg
         href: https://uptime-kuma.{{HOMEPAGE_VAR_TAILNET}}.ts.net

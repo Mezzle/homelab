@@ -18,6 +18,9 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
 │  │Scrypted │ │        │ │       │ │      │ │  │  │           │ │          │  │
 │  │ +more   │ │        │ │       │ │      │ │  │  │           │ │          │  │
 │  └─────────┘ └────────┘ └───────┘ └──────┘ │  │  └───────────┘ └──────────┘  │
+│  ┌───────────┐                              │  │                              │
+│  │ speedtest │                              │  │                              │
+│  └───────────┘                              │  │                              │
 │                                             │  │                              │
 │  SSD: OS + Docker + appdata                 │  │  SSD: everything (480GB)     │
 │  HDD: media, photos, rclone cache           │  │                              │
@@ -59,6 +62,7 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
 │   │   ├── arr/                     #     Media automation
 │   │   ├── immich/                  #     Photo management
 │   │   ├── music/                   #     Music Assistant
+│   │   ├── speedtest/               #     Speedtest Tracker
 │   │   └── infra/                   #     Homepage + Portainer + Diun
 │   ├── charm/                 #   Mac Mini stacks
 │   │   ├── infra/                   #     Portainer agent
@@ -287,6 +291,7 @@ After deployment, all services are accessible via Tailscale with automatic HTTPS
 | Music Assistant | `https://music.<tailnet>.ts.net` |
 | Homepage | `https://homepage.<tailnet>.ts.net` |
 | Portainer | `https://portainer.<tailnet>.ts.net` |
+| Speedtest Tracker | `https://speedtest.<tailnet>.ts.net` |
 | Scrypted | `https://scrypted.<tailnet>.ts.net` |
 
 ### charm (mac mini)
