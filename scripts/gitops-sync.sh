@@ -8,9 +8,10 @@
 #
 # What it does:
 #   1. git pull the repo
-#   2. For each stack that changed → docker compose up -d
-#   3. If OS config files changed → apply + reload
-#   4. Logs everything to journald
+#   2. Sync secrets from 1Password → .env files
+#   3. For each stack that changed → docker compose up -d
+#   4. If OS config files changed → apply + reload
+#   5. Logs everything to journald
 ###############################################################################
 set -euo pipefail
 
@@ -128,7 +129,21 @@ log "Changed files:"
 echo "$CHANGED_FILES" | sed 's/^/  /'
 
 ###############################################################################
-# Step 2: Apply Docker stack changes
+# Step 2: Sync secrets from 1Password
+###############################################################################
+# Pull latest secrets into .env files before restarting stacks, so new
+# env vars added in the pull are populated before docker compose reads them.
+if [[ -f "$SCRIPT_DIR/sync-secrets.sh" ]]; then
+  log "Syncing secrets from 1Password..."
+  if ! "$SCRIPT_DIR/sync-secrets.sh" 2>&1; then
+    log "WARNING: Secret sync failed — continuing with existing .env files"
+  fi
+else
+  log "WARNING: sync-secrets.sh not found — skipping secret sync"
+fi
+
+###############################################################################
+# Step 3: Apply Docker stack changes
 ###############################################################################
 # Find all stacks for this server that have changes
 STACKS_TO_UPDATE=()
@@ -171,7 +186,7 @@ if [[ ${#STACKS_TO_UPDATE[@]} -eq 0 ]]; then
 fi
 
 ###############################################################################
-# Step 3: Apply OS config changes
+# Step 4: Apply OS config changes
 #
 # Reads coreos/os-configs/manifest.conf for file mappings.
 # Shared files (no directory prefix) apply to all servers.

@@ -311,6 +311,7 @@ echo "  cd coreos && ./transpile.sh      # transpile Butane configs"
 - **PLEX_CLAIM** expires 4 minutes after generation. Don't store it — grab a fresh one from https://plex.tv/claim right before first boot.
 - **SONARR_API_KEY / RADARR_API_KEY** aren't available until after first boot. Start the arr stack once, grab the keys from each app's UI, then update 1Password.
 - **DB_PASSWORD** for Immich must be alphanumeric only (no special characters) due to Postgres connection string parsing.
+- **Secrets sync automatically** during gitops-sync. When you add a new secret to 1Password, the next sync pulls it into `.env` before restarting stacks.
 - Tailscale key docs: https://tailscale.com/kb/1085/auth-keys
 - 1Password CLI reference: https://developer.1password.com/docs/cli/reference
 - 1Password secret references: https://developer.1password.com/docs/cli/secret-references
