@@ -77,7 +77,7 @@
         widget:
           type: portainer
           url: https://portainer.{{HOMEPAGE_VAR_TAILNET}}.ts.net
-          env: 1
+          env: 3
           key: "{{HOMEPAGE_VAR_PORTAINER_API_KEY}}"
 
 - Monitoring:
