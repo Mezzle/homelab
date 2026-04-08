@@ -78,6 +78,7 @@ services:
       PUID: 1000
       PGID: 1000
       APP_KEY: ${APP_KEY}
+      SPEEDTEST_SCHEDULE: "12 * * * *"
       DB_CONNECTION: sqlite
     volumes:
       - ./appdata:/config:z
