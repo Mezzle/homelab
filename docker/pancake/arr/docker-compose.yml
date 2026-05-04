@@ -471,7 +471,10 @@ services:
     container_name: plex
     restart: unless-stopped
     <<: *security-opts
-    network_mode: host
+    networks:
+      lan:
+        mac_address: C0:8D:8E:DC:E7:5A
+      arr: ~
     # --- GPU hardware transcoding (uncomment ONE section) ---
     #
     # NVIDIA (requires nvidia-container-toolkit):
@@ -514,8 +517,9 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - lan
-      - arr
+      lan:
+        mac_address: 68:1C:85:C7:C6:CB
+      arr: ~
     deploy:
       resources:
         limits:
@@ -527,7 +531,7 @@ services:
       - ./appdata/scrypted:/server/volume:z
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "curl", "-sfk", "https://localhost:10443"]
+      test: [ "CMD", "curl", "-sfk", "https://localhost:10443" ]
       start_period: 60s
     logging: *default-logging
 
@@ -622,8 +626,6 @@ services:
     depends_on:
       plex:
         condition: service_healthy
-    extra_hosts:
-      - "host-gateway:host-gateway"
     environment:
       <<: *tailscale-env
       TS_HOSTNAME: plex
