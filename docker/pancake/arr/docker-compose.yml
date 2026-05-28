@@ -178,8 +178,6 @@ services:
       OPENVPN_USER: ${PIA_USER}
       OPENVPN_PASSWORD: ${PIA_PASS}
       SERVER_REGIONS: ${PIA_REGION:-Netherlands}
-      DNS_SERVER: "off"
-      DNS_UPSTREAM_RESOLVER_TYPE: plain
     ports:
       - 127.0.0.1:9696:9696
     volumes:
