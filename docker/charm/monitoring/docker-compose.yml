@@ -89,6 +89,7 @@ services:
     networks:
       monitoring:
       lan:
+        mac_address: 02:A3:F7:1C:6E:4B
     security_opt:
       - no-new-privileges:true
     deploy:
