@@ -3,11 +3,12 @@
 #
 # Both profiles accept 1080p as a starting point and upgrade to 2160p
 # when available. Sonarr targets WEB sources (typical for TV), Radarr
-# targets Remux/Bluray/WEB with remux 4K as the ceiling.
+# targets the SQP streaming WEB profile.
 #
 # List available profiles:  recyclarr list quality-profiles sonarr|radarr
 # List available scores:    recyclarr list score-sets sonarr|radarr
 # List quality defs:        recyclarr list qualities sonarr|radarr
+# List custom formats:      recyclarr list custom-formats sonarr|radarr
 ###############################################################################
 
 # yaml-language-server: $schema=https://raw.githubusercontent.com/recyclarr/recyclarr/master/schemas/config-schema.json
@@ -34,14 +35,23 @@ sonarr:
         reset_unmatched_scores:
           enabled: true
 
+    # Softly prefer x264/AVC over x265/HEVC when equivalent WEB releases exist.
+    # This is deliberately not a hard block; 4K streaming releases are often HEVC.
+    custom_formats:
+      - trash_ids:
+          - c9eafd50846d299b862ca9bb6ea91950  # x265
+        assign_scores_to:
+          - trash_id: c4cadd6b35b95f62c3d47a408e53e2f7  # WEB-2160p (Combined)
+            score: -500
+          - trash_id: dfa5eaae7894077ad6449169b6eb03e0  # WEB-2160p (Alternative)
+            score: -500
+
 
 ###############################################################################
-# Radarr — Remux 2160p (Combined)
+# Radarr — SQP-1 WEB (2160p)
 #
-# Grabs best available from Remux 4K down to WEB 1080p, upgrades toward
-# Remux 2160p. Good balance of quality ceiling and wide compatibility.
-# Tiers: Remux 2160p → Bluray 2160p → WEB 2160p → Remux 1080p →
-#        Bluray 1080p → WEB 1080p
+# Uses the SQP streaming-optimized WEB profile, accepting 1080p as a floor and
+# upgrading to 2160p when available.
 ###############################################################################
 radarr:
   movies:
@@ -55,3 +65,12 @@ radarr:
       - trash_id: e91c9adaca0231493f4af0d571b907f9  # [SQP] SQP-1 WEB (2160p)
         reset_unmatched_scores:
           enabled: true
+
+    # Softly prefer x264/AVC over x265/HEVC when equivalent WEB releases exist.
+    # This avoids Apple TV direct-play pain without making 4K WEB unavailable.
+    custom_formats:
+      - trash_ids:
+          - 9170d55c319f4fe40da8711ba9d8050d  # x265
+        assign_scores_to:
+          - trash_id: e91c9adaca0231493f4af0d571b907f9  # [SQP] SQP-1 WEB (2160p)
+            score: -500
