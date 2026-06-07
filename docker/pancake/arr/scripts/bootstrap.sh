@@ -106,7 +106,7 @@ SONARR_URL="http://sonarr:8989"
 RADARR_URL="http://radarr:7878"
 PROWLARR_URL="http://gluetun:9696"
 BAZARR_URL="http://bazarr:6767"
-PLEX_URL="http://host-gateway:32400"
+PLEX_URL="http://plex:32400"
 FLARESOLVERR_URL="http://flaresolverr:8191"
 
 ###############################################################################
@@ -272,7 +272,7 @@ for app in sonarr radarr; do
         \"onUpgrade\": true,
         \"onRename\": true,
         \"fields\": [
-          {\"name\": \"host\", \"value\": \"host-gateway\"},
+          {\"name\": \"host\", \"value\": \"plex\"},
           {\"name\": \"port\", \"value\": 32400},
           {\"name\": \"useSsl\", \"value\": false},
           {\"name\": \"updateLibrary\", \"value\": true}

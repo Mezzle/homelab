@@ -198,10 +198,21 @@ docker compose up -d
 
 | Data type | Where | Why |
 |---|---|---|
-| **App config/databases** | `./appdata/` (on SSD) | Fast I/O for SQLite/Postgres, backed up by the backup container |
+| **App config/databases** | `./appdata/` (on SSD) | Fast I/O for SQLite/Postgres. Back up per stack; currently only `docker/pancake/arr` has an automated backup container. |
 | **Media files** (video, photos) | `/mnt/storage/...` (on HDD) | Large files, sequential reads, HDD is fine |
 | **Secrets** | `.env` file (git-ignored) | Never committed. See 1Password section below. |
 | **Container config** | `./config/` (committed) | Versioned, deployed via git |
+
+### Backup coverage
+
+Current automated backup coverage:
+
+| Stack | Coverage |
+|---|---|
+| `docker/pancake/arr` | Automated SQLite/config tarball backups to the NAS backup share, with monthly verification. |
+| Other stacks | Not yet automated in this repo. Prioritise Immich Postgres/photos metadata, Home Assistant MySQL, Uptime Kuma, AdGuard, Portainer, Homepage, and Music Assistant state. |
+
+Before adding more services, make sure each stateful stack has a documented restore path and a periodic verification job.
 
 ### What about Portainer?
 
@@ -267,6 +278,20 @@ Then use the included sync script:
 # Sync a specific stack
 ./scripts/sync-secrets.sh docker/pancake/arr
 ```
+
+### Validating Compose files
+
+Run the validator before pushing stack changes:
+
+```bash
+# Validate every stack
+./scripts/validate-compose.sh
+
+# Validate one stack
+./scripts/validate-compose.sh docker/pancake/arr
+```
+
+`gitops-sync.sh` also runs `docker compose config --quiet` before applying any changed stack.
 
 This means you:
 1. Store secrets in 1Password once

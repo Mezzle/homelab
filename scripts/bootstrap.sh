@@ -94,7 +94,7 @@ else
   fi
 
   echo "OP_SERVICE_ACCOUNT_TOKEN=$TOKEN" | sudo tee "$TOKEN_FILE" > /dev/null
-  sudo chmod 644 "$TOKEN_FILE"
+  sudo chmod 600 "$TOKEN_FILE"
   log "Token saved to $TOKEN_FILE"
 fi
 

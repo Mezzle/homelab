@@ -8,7 +8,7 @@
 		"${TS_CERT_DOMAIN}:443": {
 			"Handlers": {
 				"/": {
-					"Proxy": "http://host-gateway:32400"
+					"Proxy": "http://plex:32400"
 				}
 			}
 		}

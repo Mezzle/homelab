@@ -174,6 +174,7 @@ for stack_dir in "${STACKS_TO_UPDATE[@]}"; do
   log "Updating stack: $stack_name"
   (
     cd "$stack_dir"
+    docker compose config --quiet
     docker compose pull --quiet 2>&1 | grep -v "up to date" || true
     docker compose up -d --remove-orphans 2>&1
   )
