@@ -373,7 +373,7 @@ systemd:
         Type=oneshot
         WorkingDirectory=/srv
         Environment=GITOPS_SERVER_DIR=docker/powder
-        ExecStart=/srv/scripts/gitops-sync.sh
+        ExecStart=/bin/bash /srv/scripts/gitops-sync.sh
         User=mez
         Group=mez
         SupplementaryGroups=wheel

@@ -31,11 +31,19 @@ else
   notify() { :; }  # no-op if helper not available
 fi
 
-# Prevent concurrent runs
-exec 200>"$LOCK_FILE"
-if ! flock -n 200; then
-  log "Another sync is already running, skipping"
-  exit 0
+# Prevent concurrent runs. Use flock's command mode with --close so long-lived
+# child processes, such as `op daemon`, cannot inherit and retain the lock.
+if [[ "${GITOPS_SYNC_LOCKED:-}" != "1" ]]; then
+  if flock -n -E 75 --close "$LOCK_FILE" env GITOPS_SYNC_LOCKED=1 /bin/bash "$0" "$@"; then
+    exit 0
+  fi
+
+  status=$?
+  if [[ "$status" -eq 75 ]]; then
+    log "Another sync is already running, skipping"
+    exit 0
+  fi
+  exit "$status"
 fi
 
 cd "$REPO_DIR"
