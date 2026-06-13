@@ -23,6 +23,10 @@ coreos/*.ign
 # Python virtualenvs
 **/.venv/
 
+# Python bytecode cache
+**/__pycache__/
+**/*.pyc
+
 # OS junk
 .DS_Store
 Thumbs.db
