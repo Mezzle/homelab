@@ -31,22 +31,25 @@ notify() {
     *)        color=8421504  ;;  # grey
   esac
 
-  local hostname
-  hostname=$(hostname -s 2>/dev/null || echo "homelab")
+  # Require jq for safe JSON encoding; skip silently if unavailable
+  command -v jq &>/dev/null || return 0
 
-  local timestamp
+  local hostname timestamp
+  hostname=$(hostname -s 2>/dev/null || echo "homelab")
   timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
 
+  local payload
+  payload=$(jq -n \
+    --arg title       "$title" \
+    --arg description "$message" \
+    --argjson color   "$color" \
+    --arg footer_text "$hostname" \
+    --arg timestamp   "$timestamp" \
+    '{embeds: [{title: $title, description: $description, color: $color,
+                footer: {text: $footer_text}, timestamp: $timestamp}]}')
+
   # Post to Discord — fire and forget, never fail the calling script
-  curl -sf -H "Content-Type: application/json" -d "{
-    \"embeds\": [{
-      \"title\": \"${title}\",
-      \"description\": \"${message}\",
-      \"color\": ${color},
-      \"footer\": {\"text\": \"${hostname}\"},
-      \"timestamp\": \"${timestamp}\"
-    }]
-  }" "$webhook_url" >/dev/null 2>&1 || true
+  curl -sf -H "Content-Type: application/json" -d "$payload" "$webhook_url" >/dev/null 2>&1 || true
 }
 
 # Load webhook URL from common locations if not already set

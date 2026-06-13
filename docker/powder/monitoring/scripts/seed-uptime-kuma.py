@@ -47,15 +47,6 @@ MYSQL_USER = os.environ.get("MYSQL_USER", "")
 MYSQL_PASS = os.environ.get("MYSQL_PASS", "")
 MYSQL_DB = os.environ.get("MYSQL_DB", "homeassistant")
 
-if not all([UPK_USER, UPK_PASS, TAILNET]):
-    print("Usage: UPK_USER=admin UPK_PASS=password TAILNET=tail1234 python seed-uptime-kuma.py")
-    print("  UPK_URL defaults to https://uptime-kuma.<TAILNET>.ts.net")
-    print()
-    print("Optional (for deep checks):")
-    print("  MQTT_USER / MQTT_PASS   — Mosquitto broker auth")
-    print("  MYSQL_USER / MYSQL_PASS — MySQL connection check")
-    sys.exit(1)
-
 TS = f"{TAILNET}.ts.net"
 
 
@@ -301,6 +292,15 @@ def add_conditional_monitors() -> None:
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    if not all([UPK_USER, UPK_PASS, TAILNET]):
+        print("Usage: UPK_USER=admin UPK_PASS=password TAILNET=tail1234 python seed-uptime-kuma.py")
+        print("  UPK_URL defaults to https://uptime-kuma.<TAILNET>.ts.net")
+        print()
+        print("Optional (for deep checks):")
+        print("  MQTT_USER / MQTT_PASS   — Mosquitto broker auth")
+        print("  MYSQL_USER / MYSQL_PASS — MySQL connection check")
+        sys.exit(1)
+
     add_conditional_monitors()
 
     log(f"Connecting to Uptime Kuma at {UPK_URL}...")

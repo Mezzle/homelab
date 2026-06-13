@@ -32,20 +32,21 @@ notify() {
   local level="$1" title="$2" message="${3:-}"
   local webhook_url="${DISCORD_WEBHOOK_URL:-}"
   [[ -z "$webhook_url" ]] && return 0
+  command -v jq &>/dev/null || return 0
   local color
   case "$level" in
     critical) color=16711680 ;; warning) color=16776960 ;;
     success)  color=65280 ;;    *)       color=3447003 ;;
   esac
-  curl -sf -H "Content-Type: application/json" -d "{
-    \"embeds\": [{
-      \"title\": \"${title}\",
-      \"description\": \"${message}\",
-      \"color\": ${color},
-      \"footer\": {\"text\": \"arr-backup\"},
-      \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
-    }]
-  }" "$webhook_url" >/dev/null 2>&1 || true
+  local payload
+  payload=$(jq -n \
+    --arg title       "$title" \
+    --arg description "$message" \
+    --argjson color   "$color" \
+    --arg timestamp   "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{embeds: [{title: $title, description: $description, color: $color,
+                footer: {text: "arr-backup"}, timestamp: $timestamp}]}')
+  curl -sf -H "Content-Type: application/json" -d "$payload" "$webhook_url" >/dev/null 2>&1 || true
 }
 
 ###############################################################################

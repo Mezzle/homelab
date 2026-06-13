@@ -456,7 +456,7 @@ services:
     entrypoint: /bin/sh
     command: >
       -c "
-        apk add --no-cache sqlite bash curl &&
+        apk add --no-cache sqlite bash curl jq &&
         { echo \"$${BACKUP_CRON} /bin/bash /backup.sh\"; echo \"$${BACKUP_VERIFY_CRON} /bin/bash /backup.sh --verify\"; } | crontab - &&
         crond -f -l 2
       "
