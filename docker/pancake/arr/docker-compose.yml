@@ -99,14 +99,14 @@ volumes:
     driver_opts:
       type: cifs
       device: //${NAS_HOST}/${NAS_SHARE}
-      o: "addr=${NAS_HOST},username=${NAS_USER},password=${NAS_PASS},uid=1001,gid=1001,iocharset=utf8,vers=3.0"
+      o: "addr=${NAS_HOST},username=${NAS_USER},password=${NAS_PASS},uid=1001,gid=1001,iocharset=utf8,vers=3.0,file_mode=0777,dir_mode=0777,noperm,context=system_u:object_r:container_file_t:s0"
 
   nas-backup:
     driver: local
     driver_opts:
       type: cifs
       device: //${NAS_HOST}/${NAS_BACKUP_SHARE}
-      o: "addr=${NAS_HOST},username=${NAS_USER},password=${NAS_PASS},uid=1001,gid=1001,iocharset=utf8,vers=3.0"
+      o: "addr=${NAS_HOST},username=${NAS_USER},password=${NAS_PASS},uid=1001,gid=1001,iocharset=utf8,vers=3.0,file_mode=0777,dir_mode=0777,noperm,context=system_u:object_r:container_file_t:s0"
 
 ##############################################################################
 # Services
@@ -264,7 +264,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ./appdata/sonarr:/config:z
-      - nas-media:/data/media
+      - nas-media:/data/media:Z
       - ./appdata/seedbox:/data/seedbox:ro
     healthcheck:
       <<: *healthcheck-defaults
@@ -297,7 +297,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ./appdata/radarr:/config:z
-      - nas-media:/data/media
+      - nas-media:/data/media:Z
       - ./appdata/seedbox:/data/seedbox:ro
     healthcheck:
       <<: *healthcheck-defaults
@@ -330,7 +330,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ./appdata/bazarr:/config:z
-      - nas-media:/data/media
+      - nas-media:/data/media:Z
     healthcheck:
       <<: *healthcheck-defaults
       test: [ "CMD", "curl", "-f", "http://localhost:6767/ping" ]
@@ -452,7 +452,7 @@ services:
     volumes:
       - ./appdata:/appdata:ro,z
       - ./scripts/backup.sh:/backup.sh:ro,z
-      - nas-backup:/nas
+      - nas-backup:/nas:z
     entrypoint: /bin/sh
     command: >
       -c "
@@ -496,7 +496,7 @@ services:
       # NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
     volumes:
       - ./appdata/plex:/config:z
-      - nas-media:/media:ro
+      - nas-media:/media:ro,Z
     healthcheck:
       <<: *healthcheck-defaults
       test: [ "CMD", "curl", "-f", "http://localhost:32400/identity" ]
