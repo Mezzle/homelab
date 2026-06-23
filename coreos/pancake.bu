@@ -499,7 +499,9 @@ systemd:
           ip rule del fwmark 100 table usb 2>/dev/null || true; \
           ip rule add fwmark 100 table usb priority 100; \
           iptables -t mangle -D PREROUTING -i br-speedtest -j MARK --set-mark 100 2>/dev/null || true; \
-          iptables -t mangle -A PREROUTING -i br-speedtest -j MARK --set-mark 100'
+          iptables -t mangle -A PREROUTING -i br-speedtest -j MARK --set-mark 100; \
+          iptables -t mangle -D PREROUTING -i br-arr -j MARK --set-mark 100 2>/dev/null || true; \
+          iptables -t mangle -A PREROUTING -i br-arr -j MARK --set-mark 100'
 
         [Install]
         WantedBy=multi-user.target

@@ -73,6 +73,8 @@ x-security-opts: &security-opts
 networks:
   arr:
     driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-arr
   # Isolated network for Docker socket proxy — only autoheal can reach it
   socket-proxy:
     driver: bridge
