@@ -474,6 +474,37 @@ systemd:
 
 
     ##################################################################
+    # Speedtest USB routing — send br-speedtest traffic via enp0s20u5
+    #
+    # Marks packets entering from the speedtest Docker bridge and routes
+    # them via the 2.5Gb USB NIC. Docker's masquerade then sources them
+    # from enp0s20u5's IP, so speedtests run over the USB adapter.
+    ##################################################################
+    - name: speedtest-usb-routing.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Route speedtest Docker bridge traffic via USB NIC (enp0s20u5)
+        After=network-online.target docker.service
+        Wants=network-online.target
+        Requires=docker.service
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStart=/bin/bash -c '\
+          grep -q "^100 usb" /etc/iproute2/rt_tables || echo "100 usb" >> /etc/iproute2/rt_tables; \
+          GW=$(ip route show default | awk "NR==1{print \$3}"); \
+          ip route replace default via $GW dev enp0s20u5 table usb; \
+          ip rule del fwmark 100 table usb 2>/dev/null || true; \
+          ip rule add fwmark 100 table usb priority 100; \
+          iptables -t mangle -D PREROUTING -i br-speedtest -j MARK --set-mark 100 2>/dev/null || true; \
+          iptables -t mangle -A PREROUTING -i br-speedtest -j MARK --set-mark 100'
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
     # Weekly container image cleanup
     ##################################################################
     - name: docker-prune.service
