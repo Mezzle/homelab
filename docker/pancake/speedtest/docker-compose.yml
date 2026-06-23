@@ -82,6 +82,7 @@ services:
       APP_KEY: ${APP_KEY}
       SPEEDTEST_SCHEDULE: "12 * * * *"
       DB_CONNECTION: sqlite
+      SPEEDTEST_SERVER_IDS: "48475"
     volumes:
       - ./appdata:/config:z
     healthcheck:
