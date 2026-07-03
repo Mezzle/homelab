@@ -98,6 +98,50 @@ storage:
 
   files:
     ##################################################################
+    # speedtest-usb-routing.sh — installed as an executable script so
+    # the systemd unit stays clean and doesn't need shell-quoting gymnastics.
+    ##################################################################
+    - path: /usr/local/sbin/speedtest-usb-routing.sh
+      mode: 0755
+      contents:
+        inline: |
+          #!/bin/bash
+          # Route br-speedtest and br-arr traffic via the 2.5G USB NIC (enp0s20u5).
+          # Idempotent — safe to re-run on a timer to self-heal after docker restarts.
+          set -eu
+
+          USB_IF=enp0s20u5
+          TABLE_ID=100
+          TABLE_NAME=usb
+          FWMARK=100
+          BRIDGES=(br-speedtest br-arr)
+
+          # Ensure the named routing table exists
+          grep -q "^${TABLE_ID} ${TABLE_NAME}\$" /etc/iproute2/rt_tables \
+            || echo "${TABLE_ID} ${TABLE_NAME}" >> /etc/iproute2/rt_tables
+
+          # Point the usb table's default route at the USB NIC's gateway.
+          # Prefer the default via USB_IF if one exists; else fall back to any default gw.
+          GW=$(ip route show default dev "${USB_IF}" | awk 'NR==1{print $3}')
+          if [ -z "${GW}" ]; then
+            GW=$(ip route show default | awk 'NR==1{print $3}')
+          fi
+          if [ -n "${GW}" ]; then
+            ip route replace default via "${GW}" dev "${USB_IF}" table "${TABLE_NAME}"
+          fi
+
+          # Policy rule: marked packets use the usb table
+          ip rule del fwmark "${FWMARK}" table "${TABLE_NAME}" 2>/dev/null || true
+          ip rule add fwmark "${FWMARK}" table "${TABLE_NAME}" priority 100
+
+          # Mark packets ingressing from each bridge (only if the bridge exists)
+          for br in "${BRIDGES[@]}"; do
+            ip link show "${br}" >/dev/null 2>&1 || continue
+            iptables -t mangle -D PREROUTING -i "${br}" -j MARK --set-mark "${FWMARK}" 2>/dev/null || true
+            iptables -t mangle -A PREROUTING -i "${br}" -j MARK --set-mark "${FWMARK}"
+          done
+
+    ##################################################################
     # Hostname
     ##################################################################
     - path: /etc/hostname
@@ -476,9 +520,15 @@ systemd:
     ##################################################################
     # Speedtest USB routing — send br-speedtest traffic via enp0s20u5
     #
-    # Marks packets entering from the speedtest Docker bridge and routes
-    # them via the 2.5Gb USB NIC. Docker's masquerade then sources them
-    # from enp0s20u5's IP, so speedtests run over the USB adapter.
+    # Marks packets entering from the speedtest and *arr Docker bridges
+    # and routes them via the 2.5Gb USB NIC. Docker's masquerade then
+    # sources them from enp0s20u5's IP, so those flows egress via USB.
+    #
+    # A companion timer re-applies the rules every 5 minutes because:
+    #   - Docker restarts (weekly prune, compose up) flush mangle rules
+    #     and its own bridges, which would remove any static config.
+    #   - The commands are idempotent (delete-then-add), so re-running
+    #     is safe and self-healing.
     ##################################################################
     - name: speedtest-usb-routing.service
       enabled: true
@@ -486,25 +536,29 @@ systemd:
         [Unit]
         Description=Route speedtest Docker bridge traffic via USB NIC (enp0s20u5)
         After=network-online.target docker.service
-        Wants=network-online.target
-        Requires=docker.service
+        Wants=network-online.target docker.service
 
         [Service]
         Type=oneshot
-        RemainAfterExit=yes
-        ExecStart=/bin/bash -c '\
-          grep -q "^100 usb" /etc/iproute2/rt_tables || echo "100 usb" >> /etc/iproute2/rt_tables; \
-          GW=$(ip route show default | awk "NR==1{print \$3}"); \
-          ip route replace default via $GW dev enp0s20u5 table usb; \
-          ip rule del fwmark 100 table usb 2>/dev/null || true; \
-          ip rule add fwmark 100 table usb priority 100; \
-          iptables -t mangle -D PREROUTING -i br-speedtest -j MARK --set-mark 100 2>/dev/null || true; \
-          iptables -t mangle -A PREROUTING -i br-speedtest -j MARK --set-mark 100; \
-          iptables -t mangle -D PREROUTING -i br-arr -j MARK --set-mark 100 2>/dev/null || true; \
-          iptables -t mangle -A PREROUTING -i br-arr -j MARK --set-mark 100'
+        RemainAfterExit=no
+        ExecStart=/usr/local/sbin/speedtest-usb-routing.sh
 
         [Install]
         WantedBy=multi-user.target
+
+    - name: speedtest-usb-routing.timer
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Re-apply speedtest USB routing periodically (self-heal after docker restarts)
+
+        [Timer]
+        OnBootSec=1min
+        OnUnitActiveSec=5min
+        Unit=speedtest-usb-routing.service
+
+        [Install]
+        WantedBy=timers.target
 
     ##################################################################
     # Weekly container image cleanup
