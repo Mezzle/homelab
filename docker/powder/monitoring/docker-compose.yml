@@ -8,7 +8,7 @@
 #   - Uptime Kuma: monitors all homelab services over Tailscale
 #
 # Required:
-#   - Copy .env.example to .env and fill in your values
+#   - DockTail running on this Docker host (see docker/powder/infra)
 ##############################################################################
 
 x-common-env: &common-env
@@ -25,35 +25,6 @@ x-healthcheck-defaults: &healthcheck-defaults
   timeout: 10s
   retries: 3
   start_period: 15s
-
-x-tailscale-env: &tailscale-env
-  TS_AUTHKEY: ${TS_AUTHKEY}
-  TS_STATE_DIR: /var/lib/tailscale
-  TS_USERSPACE: "true"
-  TS_ENABLE_HEALTH_CHECK: "true"
-
-x-tailscale-sidecar: &tailscale-sidecar
-  image: tailscale/tailscale:latest
-  restart: unless-stopped
-  networks:
-    - monitoring
-  cap_add:
-    - NET_ADMIN
-    - NET_RAW
-  devices:
-    - /dev/net/tun
-  deploy:
-    resources:
-      limits:
-        memory: 128M
-  read_only: true
-  tmpfs:
-    - /tmp
-    - /run
-  healthcheck:
-    <<: *healthcheck-defaults
-    test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:9002/healthz" ]
-  logging: *default-logging
 
 networks:
   monitoring:
@@ -81,28 +52,18 @@ services:
           memory: 256M
     ports:
       - 3001:3001
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=uptime-kuma"
+      - "docktail.service.port=3001"
+      - "docktail.service.service-port=443"
+      # DockTail runs in the infra stack, so use the host-published port
+      # rather than trying to reach this stack's private Docker network.
+      - "docktail.service.direct=false"
     volumes:
       - ./appdata/uptime-kuma:/app/data:z
     healthcheck:
       <<: *healthcheck-defaults
       test: [ "CMD", "curl", "-f", "http://localhost:3001/" ]
     logging: *default-logging
-
-  ##########################################################################
-  # Tailscale sidecars
-  ##########################################################################
-  ts-uptime-kuma:
-    <<: *tailscale-sidecar
-    container_name: ts-uptime-kuma
-    hostname: ts-uptime-kuma
-    depends_on:
-      uptime-kuma:
-        condition: service_healthy
-    environment:
-      <<: *tailscale-env
-      TS_HOSTNAME: uptime-kuma
-      TS_SERVE_CONFIG: /config/serve.json
-    volumes:
-      - ./config/tailscale/uptime-kuma/state:/var/lib/tailscale:z
-      - ./config/tailscale/uptime-kuma/serve.json:/config/serve.json:ro,z
 

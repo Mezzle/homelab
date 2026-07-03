@@ -58,6 +58,32 @@ networks:
 
 services:
   ##########################################################################
+  # DockTail — exposes labelled Docker containers as Tailscale Services
+  ##########################################################################
+  docktail:
+    image: ghcr.io/marvinvr/docktail:latest
+    container_name: docktail
+    restart: unless-stopped
+    networks:
+      - infra
+    security_opt:
+      - no-new-privileges:true
+      # uCore/CoreOS SELinux blocks Docker socket access without this.
+      - label=disable
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/tailscale:/var/run/tailscale
+    environment:
+      TAILSCALE_OAUTH_CLIENT_ID: ${TAILSCALE_OAUTH_CLIENT_ID}
+      TAILSCALE_OAUTH_CLIENT_SECRET: ${TAILSCALE_OAUTH_CLIENT_SECRET}
+      DEFAULT_SERVICE_TAGS: tag:service
+    logging: *default-logging
+
+  ##########################################################################
   # Portainer Agent
   #
   # Connect from the primary Portainer UI on pancake:
