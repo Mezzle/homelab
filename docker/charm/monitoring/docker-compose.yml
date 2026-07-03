@@ -24,35 +24,6 @@ x-healthcheck-defaults: &healthcheck-defaults
   retries: 3
   start_period: 15s
 
-x-tailscale-env: &tailscale-env
-  TS_AUTHKEY: ${TS_AUTHKEY}
-  TS_STATE_DIR: /var/lib/tailscale
-  TS_USERSPACE: "false"
-  TS_ENABLE_HEALTH_CHECK: "true"
-
-x-tailscale-sidecar: &tailscale-sidecar
-  image: tailscale/tailscale:latest
-  restart: unless-stopped
-  networks:
-    - monitoring
-  cap_add:
-    - NET_ADMIN
-    - NET_RAW
-  devices:
-    - /dev/net/tun
-  deploy:
-    resources:
-      limits:
-        memory: 128M
-  read_only: true
-  tmpfs:
-    - /tmp
-    - /run
-  healthcheck:
-    <<: *healthcheck-defaults
-    test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9002/healthz"]
-  logging: *default-logging
-
 networks:
   monitoring:
     driver: bridge
@@ -96,6 +67,16 @@ services:
       resources:
         limits:
           memory: 256M
+    ports:
+      - 127.0.0.1:3000:80
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=adguard-backup"
+      - "docktail.service.port=80"
+      - "docktail.service.service-port=443"
+      # DockTail runs in the infra stack, so use the host-published port
+      # rather than trying to reach this stack's private Docker network.
+      - "docktail.service.direct=false"
     volumes:
       - ./appdata/adguard/work:/opt/adguardhome/work:z
       - ./appdata/adguard/conf:/opt/adguardhome/conf:z
@@ -138,21 +119,3 @@ services:
       adguard:
         condition: service_healthy
     logging: *default-logging
-
-  ##########################################################################
-  # Tailscale sidecars
-  ##########################################################################
-  ts-adguard:
-    <<: *tailscale-sidecar
-    container_name: ts-adguard
-    hostname: ts-adguard
-    depends_on:
-      adguard:
-        condition: service_healthy
-    environment:
-      <<: *tailscale-env
-      TS_HOSTNAME: adguard-backup
-      TS_SERVE_CONFIG: /config/serve.json
-    volumes:
-      - ./config/tailscale/adguard/state:/var/lib/tailscale:z
-      - ./config/tailscale/adguard/serve.json:/config/serve.json:ro,z

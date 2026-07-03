@@ -323,9 +323,9 @@ After deployment, all services are accessible via Tailscale with automatic HTTPS
 
 | Service | Tailnet URL |
 |---|---|
-| Portainer (agent) | `portainer-charm.<tailnet>.ts.net:9001` |
+| Portainer (agent) | `https://portainer-charm.<tailnet>.ts.net` |
 | Zigbee2MQTT | `https://z2m.<tailnet>.ts.net` |
-| AdGuard Home | `https://adguard.<tailnet>.ts.net` |
+| AdGuard Home | `https://adguard-backup.<tailnet>.ts.net` |
 
 ### powder (Oracle Cloud — ARM)
 

@@ -182,15 +182,16 @@ op item get "pancake/speedtest" --vault Homelab --fields label=APP_KEY,label=TS_
 
 ---
 
-### `charm/infra` — Portainer agent
+### `charm/infra` — Portainer agent + DockTail
 
 | Field | Example value | Notes |
 |---|---|---|
-| `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | |
+| `TAILSCALE_OAUTH_CLIENT_ID` | `tskey-client-...` | Tailscale OAuth client with Services write access |
+| `TAILSCALE_OAUTH_CLIENT_SECRET` | `tskey-secret-...` | Tailscale OAuth client secret |
 
 ```bash
 # Verify
-op item get "charm/infra" --vault Homelab --fields label=TS_AUTHKEY
+op item get "charm/infra" --vault Homelab --fields label=TAILSCALE_OAUTH_CLIENT_ID,label=TAILSCALE_OAUTH_CLIENT_SECRET
 ```
 
 ---
@@ -207,11 +208,10 @@ op item get "charm/infra" --vault Homelab --fields label=TS_AUTHKEY
 | `MYSQL_PASSWORD` | `haP4ssw0rd` | Random string |
 | `Z2M_ADAPTER_HOST` | `192.168.1.50` | IP of your Zigbee coordinator |
 | `Z2M_ADAPTER_PORT` | `6638` | |
-| `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | |
 
 ```bash
 # Verify
-op item get "charm/home" --vault Homelab --fields label=MQTT_USER,label=MYSQL_ROOT_PASSWORD,label=Z2M_ADAPTER_HOST,label=TS_AUTHKEY
+op item get "charm/home" --vault Homelab --fields label=MQTT_USER,label=MYSQL_ROOT_PASSWORD,label=Z2M_ADAPTER_HOST
 ```
 
 ---
@@ -225,11 +225,10 @@ op item get "charm/home" --vault Homelab --fields label=MQTT_USER,label=MYSQL_RO
 | `ADGUARD_PRIMARY_PASS` | `adguard-password` | |
 | `ADGUARD_REPLICA_USER` | `admin` | |
 | `ADGUARD_REPLICA_PASS` | `replica-password` | |
-| `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | |
 
 ```bash
 # Verify
-op item get "charm/monitoring" --vault Homelab --fields label=ADGUARD_PRIMARY_URL,label=TS_AUTHKEY
+op item get "charm/monitoring" --vault Homelab --fields label=ADGUARD_PRIMARY_URL
 ```
 
 ---
@@ -297,13 +296,13 @@ check "pancake/music" TS_AUTHKEY
 check "pancake/speedtest" APP_KEY TS_AUTHKEY
 check "pancake/infra" TS_AUTHKEY TAILNET SONARR_API_KEY RADARR_API_KEY \
   PROWLARR_API_KEY PLEX_TOKEN IMMICH_API_KEY ADGUARD_USER ADGUARD_PASS
-check "charm/infra" TS_AUTHKEY
+check "charm/infra" TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET
 
 check "charm/home" MQTT_USER MQTT_PASS MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD \
-  Z2M_ADAPTER_HOST Z2M_ADAPTER_PORT TS_AUTHKEY
+  Z2M_ADAPTER_HOST Z2M_ADAPTER_PORT
 
 check "charm/monitoring" ADGUARD_PRIMARY_URL ADGUARD_PRIMARY_USER ADGUARD_PRIMARY_PASS \
-  ADGUARD_REPLICA_USER ADGUARD_REPLICA_PASS TS_AUTHKEY
+  ADGUARD_REPLICA_USER ADGUARD_REPLICA_PASS
 
 check "powder/infra" TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET
 
