@@ -100,11 +100,10 @@ op read "op://Homelab/coreos/HDD_DISK_ID"
 | `SONARR_API_KEY` | *(fill after first boot)* | Sonarr UI → Settings → General |
 | `RADARR_API_KEY` | *(fill after first boot)* | Radarr UI → Settings → General |
 | `DISCORD_WEBHOOK_URL` | `https://discord.com/api/webhooks/...` | Optional. Server Settings → Integrations → Webhooks |
-| `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | [Tailscale admin → Keys](https://login.tailscale.com/admin/settings/keys) |
 
 ```bash
 # Verify
-op item get "pancake/arr" --vault Homelab --fields label=SEEDBOX_HOST,label=NAS_HOST,label=PIA_USER,label=TS_AUTHKEY
+op item get "pancake/arr" --vault Homelab --fields label=SEEDBOX_HOST,label=NAS_HOST,label=PIA_USER
 ```
 
 ---
@@ -125,25 +124,17 @@ op item get "pancake/arr" --vault Homelab --fields label=SEEDBOX_HOST,label=NAS_
 | `IMMICH_TRANSCODING_BACKEND` | `nvenc` | `nvenc` for NVIDIA, `cpu` otherwise |
 | `IMMICH_ML_BACKEND` | `cuda` | `cuda` for NVIDIA, `cpu` otherwise |
 | `IMMICH_ML_IMAGE_SUFFIX` | `-cuda` | `-cuda`, `-openvino`, or blank for cpu |
-| `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | |
 
 ```bash
 # Verify
-op item get "pancake/immich" --vault Homelab --fields label=DB_PASSWORD,label=NAS_HOST,label=TS_AUTHKEY
+op item get "pancake/immich" --vault Homelab --fields label=DB_PASSWORD,label=NAS_HOST
 ```
 
 ---
 
 ### `pancake/music` — Music Assistant
 
-| Field | Example value | Notes |
-|---|---|---|
-| `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | |
-
-```bash
-# Verify
-op item get "pancake/music" --vault Homelab --fields label=TS_AUTHKEY
-```
+No stack-local secrets; Music Assistant is exposed via DockTail from `pancake/infra`.
 
 ---
 
@@ -151,7 +142,8 @@ op item get "pancake/music" --vault Homelab --fields label=TS_AUTHKEY
 
 | Field | Example value | Notes |
 |---|---|---|
-| `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | |
+| `TAILSCALE_OAUTH_CLIENT_ID` | `tskey-client-...` | Tailscale OAuth client with Services write access |
+| `TAILSCALE_OAUTH_CLIENT_SECRET` | `tskey-secret-...` | Tailscale OAuth client secret |
 | `TAILNET` | `tail1234` | Your tailnet name (before `.ts.net`) |
 | `SONARR_API_KEY` | *(fill after first boot)* | Sonarr UI → Settings → General |
 | `RADARR_API_KEY` | *(fill after first boot)* | Radarr UI → Settings → General |
@@ -163,7 +155,7 @@ op item get "pancake/music" --vault Homelab --fields label=TS_AUTHKEY
 
 ```bash
 # Verify
-op item get "pancake/infra" --vault Homelab --fields label=TS_AUTHKEY,label=TAILNET,label=SONARR_API_KEY
+op item get "pancake/infra" --vault Homelab --fields label=TAILSCALE_OAUTH_CLIENT_ID,label=TAILSCALE_OAUTH_CLIENT_SECRET,label=TAILNET,label=SONARR_API_KEY
 ```
 
 ---
@@ -173,11 +165,10 @@ op item get "pancake/infra" --vault Homelab --fields label=TS_AUTHKEY,label=TAIL
 | Field | Example value | Notes |
 |---|---|---|
 | `APP_KEY` | `base64:xxxxxxxx...` | Generate: `echo "base64:$(openssl rand -base64 32)"` |
-| `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | |
 
 ```bash
 # Verify
-op item get "pancake/speedtest" --vault Homelab --fields label=APP_KEY,label=TS_AUTHKEY
+op item get "pancake/speedtest" --vault Homelab --fields label=APP_KEY
 ```
 
 ---
@@ -286,16 +277,15 @@ check "coreos" SSH_PUBKEY TS_AUTHKEY HDD_DISK_ID
 
 check "pancake/arr" SEEDBOX_HOST SEEDBOX_USER SEEDBOX_PORT SEEDBOX_REMOTE_PATH \
   NAS_HOST NAS_SHARE NAS_BACKUP_SHARE NAS_USER NAS_PASS \
-  PIA_USER PIA_PASS TS_AUTHKEY
+  PIA_USER PIA_PASS
 
 check "pancake/immich" IMMICH_VERSION NAS_HOST NAS_PHOTOS_SHARE NAS_PHOTOS_USER \
   NAS_PHOTOS_PASS DB_DATA_LOCATION DB_USERNAME DB_PASSWORD DB_DATABASE_NAME \
-  IMMICH_TRANSCODING_BACKEND IMMICH_ML_BACKEND IMMICH_ML_IMAGE_SUFFIX TS_AUTHKEY
+  IMMICH_TRANSCODING_BACKEND IMMICH_ML_BACKEND IMMICH_ML_IMAGE_SUFFIX
 
-check "pancake/music" TS_AUTHKEY
-check "pancake/speedtest" APP_KEY TS_AUTHKEY
-check "pancake/infra" TS_AUTHKEY TAILNET SONARR_API_KEY RADARR_API_KEY \
-  PROWLARR_API_KEY PLEX_TOKEN IMMICH_API_KEY ADGUARD_USER ADGUARD_PASS
+check "pancake/speedtest" APP_KEY
+check "pancake/infra" TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET TAILNET \
+  SONARR_API_KEY RADARR_API_KEY PROWLARR_API_KEY PLEX_TOKEN IMMICH_API_KEY ADGUARD_USER ADGUARD_PASS
 check "charm/infra" TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET
 
 check "charm/home" MQTT_USER MQTT_PASS MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD \
