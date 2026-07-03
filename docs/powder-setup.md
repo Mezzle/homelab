@@ -206,8 +206,8 @@ docker ps
 ```
 
 You should see:
-- `portainer-agent` + `ts-portainer-powder` (infra)
-- `uptime-kuma` + `ts-uptime-kuma` (monitoring)
+- `docktail` + `portainer-agent` (infra)
+- `uptime-kuma` (monitoring)
 
 ## Step 6: Configure services
 
