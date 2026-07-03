@@ -234,29 +234,23 @@ op item get "charm/monitoring" --vault Homelab --fields label=ADGUARD_PRIMARY_UR
 
 ---
 
-### `powder/infra` — Portainer agent
+### `powder/infra` — Portainer agent + DockTail
 
 | Field | Example value | Notes |
 |---|---|---|
-| `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | |
+| `TAILSCALE_OAUTH_CLIENT_ID` | `tskey-client-...` | Tailscale OAuth client with Services write access |
+| `TAILSCALE_OAUTH_CLIENT_SECRET` | `tskey-secret-...` | Tailscale OAuth client secret |
 
 ```bash
 # Verify
-op item get "powder/infra" --vault Homelab --fields label=TS_AUTHKEY
+op item get "powder/infra" --vault Homelab --fields label=TAILSCALE_OAUTH_CLIENT_ID,label=TAILSCALE_OAUTH_CLIENT_SECRET
 ```
 
 ---
 
 ### `powder/monitoring` — External monitoring (Oracle Cloud)
 
-| Field | Example value | Notes |
-|---|---|---|
-| `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | |
-
-```bash
-# Verify
-op item get "powder/monitoring" --vault Homelab --fields label=TS_AUTHKEY
-```
+No stack-local secrets; Uptime Kuma is exposed via DockTail from `powder/infra`.
 
 ---
 
@@ -311,8 +305,7 @@ check "charm/home" MQTT_USER MQTT_PASS MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_
 check "charm/monitoring" ADGUARD_PRIMARY_URL ADGUARD_PRIMARY_USER ADGUARD_PRIMARY_PASS \
   ADGUARD_REPLICA_USER ADGUARD_REPLICA_PASS TS_AUTHKEY
 
-check "powder/infra" TS_AUTHKEY
-check "powder/monitoring" TS_AUTHKEY
+check "powder/infra" TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET
 
 echo ""
 echo "Done. Fix any MISSING fields above, then run:"
@@ -322,7 +315,7 @@ echo "  cd coreos && ./transpile.sh      # transpile Butane configs"
 
 ## Notes
 
-- **TS_AUTHKEY** appears in every item. Use a single reusable + ephemeral key tagged with an ACL tag and paste it everywhere. When you rotate it, update all items.
+- **TS_AUTHKEY** appears in each stack that still uses Tailscale sidecars. Use a single reusable + ephemeral key tagged with an ACL tag and paste it into those items. When you rotate it, update those items.
 - **PLEX_CLAIM** expires 4 minutes after generation. Don't store it — grab a fresh one from https://plex.tv/claim right before first boot.
 - **SONARR_API_KEY / RADARR_API_KEY** aren't available until after first boot. Start the arr stack once, grab the keys from each app's UI, then update 1Password.
 - **DB_PASSWORD** for Immich must be alphanumeric only (no special characters) due to Postgres connection string parsing.

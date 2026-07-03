@@ -331,7 +331,7 @@ After deployment, all services are accessible via Tailscale with automatic HTTPS
 
 | Service | Tailnet URL |
 |---|---|
-| Portainer (agent) | `portainer-powder.<tailnet>.ts.net:9001` |
+| Portainer (agent) | `https://portainer-powder.<tailnet>.ts.net` |
 | Uptime Kuma | `https://uptime-kuma.<tailnet>.ts.net` |
 
 ### Other

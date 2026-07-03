@@ -23,35 +23,6 @@ x-healthcheck-defaults: &healthcheck-defaults
   retries: 3
   start_period: 15s
 
-x-tailscale-env: &tailscale-env
-  TS_AUTHKEY: ${TS_AUTHKEY}
-  TS_STATE_DIR: /var/lib/tailscale
-  TS_USERSPACE: "true"
-  TS_ENABLE_HEALTH_CHECK: "true"
-
-x-tailscale-sidecar: &tailscale-sidecar
-  image: tailscale/tailscale:latest
-  restart: unless-stopped
-  networks:
-    - infra
-  cap_add:
-    - NET_ADMIN
-    - NET_RAW
-  devices:
-    - /dev/net/tun
-  deploy:
-    resources:
-      limits:
-        memory: 128M
-  read_only: true
-  tmpfs:
-    - /tmp
-    - /run
-  healthcheck:
-    <<: *healthcheck-defaults
-    test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:9002/healthz" ]
-  logging: *default-logging
-
 networks:
   infra:
     driver: bridge
@@ -88,7 +59,7 @@ services:
   #
   # Connect from the primary Portainer UI on pancake:
   #   Environments → Add → Agent
-  #   URL: portainer-powder.<tailnet>.ts.net:9001
+  #   URL: https://portainer-powder.<tailnet>.ts.net
   ##########################################################################
   portainer-agent:
     image: portainer/agent:alpine
@@ -102,8 +73,12 @@ services:
       resources:
         limits:
           memory: 128M
-    ports:
-      - 9001:9001
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=portainer-powder"
+      - "docktail.service.port=9001"
+      - "docktail.service.protocol=https+insecure"
+      - "docktail.service.service-port=443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/volumes:/var/lib/docker/volumes
@@ -111,21 +86,3 @@ services:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--no-check-certificate", "https://localhost:9001/ping"]
     logging: *default-logging
-
-  ##########################################################################
-  # Tailscale sidecar — exposes agent port over Tailscale
-  ##########################################################################
-  ts-portainer:
-    <<: *tailscale-sidecar
-    container_name: ts-portainer-powder
-    hostname: ts-portainer-powder
-    depends_on:
-      portainer-agent:
-        condition: service_healthy
-    environment:
-      <<: *tailscale-env
-      TS_HOSTNAME: portainer-powder
-      TS_SERVE_CONFIG: /config/serve.json
-    volumes:
-      - ./config/tailscale/portainer/state:/var/lib/tailscale:z
-      - ./config/tailscale/portainer/serve.json:/config/serve.json:ro,z

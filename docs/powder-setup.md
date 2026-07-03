@@ -246,7 +246,7 @@ From the primary Portainer UI on pancake:
 
 1. Open https://portainer.\<tailnet\>.ts.net
 2. Go to **Environments → Add Environment → Agent**
-3. URL: `portainer-powder.<tailnet>.ts.net:9001`
+3. URL: `https://portainer-powder.<tailnet>.ts.net`
 4. Powder's containers should now appear in the Portainer UI
 
 ## Step 7: Verify everything
