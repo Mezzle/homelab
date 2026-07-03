@@ -26,6 +26,12 @@ x-healthcheck-defaults: &healthcheck-defaults
 networks:
   infra:
     driver: bridge
+  home:
+    name: home_home
+    external: true
+  monitoring:
+    name: monitoring_monitoring
+    external: true
 
 services:
   ##########################################################################
@@ -37,6 +43,8 @@ services:
     restart: unless-stopped
     networks:
       - infra
+      - home
+      - monitoring
     security_opt:
       - no-new-privileges:true
       # uCore/CoreOS SELinux blocks Docker socket access without this.

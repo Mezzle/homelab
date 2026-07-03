@@ -59,9 +59,7 @@ services:
       - "docktail.service.protocol=tcp"
       - "docktail.service.service-port=1883"
       - "docktail.service.service-protocol=tcp"
-      # DockTail runs in the infra stack, so use the host-published port
-      # rather than trying to reach this stack's private Docker network.
-      - "docktail.service.direct=false"
+      - "docktail.service.network=home_home"
     volumes:
       - ./config/mosquitto:/mosquitto/config:ro,z
       - ./appdata/mosquitto/data:/mosquitto/data:z

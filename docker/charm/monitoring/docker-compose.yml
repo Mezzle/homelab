@@ -67,16 +67,12 @@ services:
       resources:
         limits:
           memory: 256M
-    ports:
-      - 127.0.0.1:3000:80
     labels:
       - "docktail.service.enable=true"
       - "docktail.service.name=adguard-backup"
       - "docktail.service.port=80"
       - "docktail.service.service-port=443"
-      # DockTail runs in the infra stack, so use the host-published port
-      # rather than trying to reach this stack's private Docker network.
-      - "docktail.service.direct=false"
+      - "docktail.service.network=monitoring_monitoring"
     volumes:
       - ./appdata/adguard/work:/opt/adguardhome/work:z
       - ./appdata/adguard/conf:/opt/adguardhome/conf:z
