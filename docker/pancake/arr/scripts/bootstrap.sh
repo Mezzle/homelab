@@ -2,9 +2,9 @@
 ###############################################################################
 # bootstrap.sh — Auto-configure cross-service connections after first boot
 #
-# Links Prowlarr → Sonarr/Radarr, configures FlareSolverr proxy,
-# connects Bazarr → Sonarr/Radarr, sets up Plex notifications,
-# and triggers an initial Recyclarr sync.
+# Links Prowlarr → Sonarr/Radarr, routes indexer searches through the
+# gluetun HTTP proxy, connects Bazarr → Sonarr/Radarr, sets up Plex
+# notifications, and triggers an initial Recyclarr sync.
 #
 # Prerequisites:
 #   - All arr services must be running and healthy
@@ -104,10 +104,12 @@ ok "Bazarr:   ${BAZARR_KEY:0:8}..."
 # Service URLs (internal Docker network)
 SONARR_URL="http://sonarr:8989"
 RADARR_URL="http://radarr:7878"
-PROWLARR_URL="http://gluetun:9696"
+PROWLARR_URL="http://prowlarr:9696"
 BAZARR_URL="http://bazarr:6767"
 PLEX_URL="http://plex:32400"
-FLARESOLVERR_URL="http://flaresolverr:8191"
+# gluetun's built-in HTTP proxy — Prowlarr tunnels indexer searches through it
+GLUETUN_PROXY_HOST="gluetun"
+GLUETUN_PROXY_PORT=8888
 
 ###############################################################################
 # Wait for all services
@@ -122,24 +124,24 @@ wait_for_service "Bazarr"     "$BAZARR_URL/api/system/status?apikey=$BAZARR_KEY"
 ###############################################################################
 log "Configuring root folders..."
 
-# Sonarr — /data/media/tv
+# Sonarr — /data/media/TV
 EXISTING=$(api_get "$SONARR_URL/api/v3/rootfolder?apikey=$SONARR_KEY")
-if echo "$EXISTING" | grep -q "/data/media/tv"; then
+if echo "$EXISTING" | grep -q "/data/media/TV"; then
   ok "Sonarr root folder already configured"
 else
   STATUS=$(api_call POST "$SONARR_URL/api/v3/rootfolder?apikey=$SONARR_KEY" \
-    '{"path":"/data/media/tv","qualityProfileId":1,"metadataProfileId":1}')
-  [[ "$STATUS" == "201" || "$DRY_RUN" == "true" ]] && ok "Sonarr root folder: /data/media/tv" || fail "Sonarr root folder ($STATUS)"
+    '{"path":"/data/media/TV","qualityProfileId":1,"metadataProfileId":1}')
+  [[ "$STATUS" == "201" || "$DRY_RUN" == "true" ]] && ok "Sonarr root folder: /data/media/TV" || fail "Sonarr root folder ($STATUS)"
 fi
 
-# Radarr — /data/media/movies
+# Radarr — /data/media/Movies
 EXISTING=$(api_get "$RADARR_URL/api/v3/rootfolder?apikey=$RADARR_KEY")
-if echo "$EXISTING" | grep -q "/data/media/movies"; then
+if echo "$EXISTING" | grep -q "/data/media/Movies"; then
   ok "Radarr root folder already configured"
 else
   STATUS=$(api_call POST "$RADARR_URL/api/v3/rootfolder?apikey=$RADARR_KEY" \
-    '{"path":"/data/media/movies","qualityProfileId":1,"metadataProfileId":1}')
-  [[ "$STATUS" == "201" || "$DRY_RUN" == "true" ]] && ok "Radarr root folder: /data/media/movies" || fail "Radarr root folder ($STATUS)"
+    '{"path":"/data/media/Movies","qualityProfileId":1,"metadataProfileId":1}')
+  [[ "$STATUS" == "201" || "$DRY_RUN" == "true" ]] && ok "Radarr root folder: /data/media/Movies" || fail "Radarr root folder ($STATUS)"
 fi
 
 ###############################################################################
@@ -161,7 +163,7 @@ else
       \"implementation\": \"Sonarr\",
       \"configContract\": \"SonarrSettings\",
       \"fields\": [
-        {\"name\": \"prowlarrUrl\", \"value\": \"http://gluetun:9696\"},
+        {\"name\": \"prowlarrUrl\", \"value\": \"http://prowlarr:9696\"},
         {\"name\": \"baseUrl\", \"value\": \"$SONARR_URL\"},
         {\"name\": \"apiKey\", \"value\": \"$SONARR_KEY\"},
         {\"name\": \"syncCategories\", \"value\": [5000,5010,5020,5030,5040,5045,5050,5060,5070,5080]}
@@ -181,7 +183,7 @@ else
       \"implementation\": \"Radarr\",
       \"configContract\": \"RadarrSettings\",
       \"fields\": [
-        {\"name\": \"prowlarrUrl\", \"value\": \"http://gluetun:9696\"},
+        {\"name\": \"prowlarrUrl\", \"value\": \"http://prowlarr:9696\"},
         {\"name\": \"baseUrl\", \"value\": \"$RADARR_URL\"},
         {\"name\": \"apiKey\", \"value\": \"$RADARR_KEY\"},
         {\"name\": \"syncCategories\", \"value\": [2000,2010,2020,2030,2040,2045,2050,2060,2070,2080]}
@@ -191,25 +193,59 @@ else
 fi
 
 ###############################################################################
-# 3. FlareSolverr proxy in Prowlarr
+# 3. Route Prowlarr indexer searches through the gluetun HTTP proxy
+#
+# Prowlarr applies a proxy per-indexer via a tag. We ensure a "vpn" tag
+# exists, create the HTTP proxy pointing at gluetun:8888 with that tag,
+# then tag every indexer so their search/grab traffic tunnels.
 ###############################################################################
-log "Configuring FlareSolverr proxy..."
+log "Configuring gluetun HTTP proxy..."
 
+# Ensure the "vpn" tag exists and capture its id
+TAGS=$(api_get "$PROWLARR_URL/api/v1/tag?apikey=$PROWLARR_KEY")
+VPN_TAG_ID=$(echo "$TAGS" | python3 -c 'import sys,json;print(next((t["id"] for t in json.load(sys.stdin) if t["label"]=="vpn"),""))' 2>/dev/null || echo "")
+if [[ -z "$VPN_TAG_ID" && "$DRY_RUN" == "false" ]]; then
+  VPN_TAG_ID=$(curl -s -H "Content-Type: application/json" -X POST \
+    "$PROWLARR_URL/api/v1/tag?apikey=$PROWLARR_KEY" -d '{"label":"vpn"}' \
+    | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])' 2>/dev/null || echo "")
+  ok "Created tag: vpn (id ${VPN_TAG_ID:-?})"
+else
+  ok "Tag vpn already exists (id ${VPN_TAG_ID:-DRY})"
+fi
+
+# Create the HTTP proxy (idempotent by name)
 EXISTING_PROXIES=$(api_get "$PROWLARR_URL/api/v1/indexerproxy?apikey=$PROWLARR_KEY")
-if echo "$EXISTING_PROXIES" | grep -q "FlareSolverr"; then
-  ok "FlareSolverr proxy already configured"
+if echo "$EXISTING_PROXIES" | grep -q "gluetun"; then
+  ok "gluetun HTTP proxy already configured"
 else
   STATUS=$(api_call POST "$PROWLARR_URL/api/v1/indexerproxy?apikey=$PROWLARR_KEY" \
     "{
-      \"name\": \"FlareSolverr\",
-      \"implementation\": \"FlareSolverr\",
-      \"configContract\": \"FlareSolverrSettings\",
+      \"name\": \"gluetun\",
+      \"implementation\": \"Http\",
+      \"configContract\": \"HttpSettings\",
+      \"tags\": [${VPN_TAG_ID:-0}],
       \"fields\": [
-        {\"name\": \"host\", \"value\": \"$FLARESOLVERR_URL\"},
-        {\"name\": \"requestTimeout\", \"value\": 60}
+        {\"name\": \"host\", \"value\": \"$GLUETUN_PROXY_HOST\"},
+        {\"name\": \"port\", \"value\": $GLUETUN_PROXY_PORT}
       ]
     }")
-  [[ "$STATUS" == "201" || "$DRY_RUN" == "true" ]] && ok "FlareSolverr proxy" || fail "FlareSolverr proxy ($STATUS)"
+  [[ "$STATUS" == "201" || "$DRY_RUN" == "true" ]] && ok "gluetun HTTP proxy" || fail "gluetun HTTP proxy ($STATUS)"
+fi
+
+# Apply the vpn tag to every indexer so their traffic uses the proxy
+if $DRY_RUN; then
+  log "  [DRY] Tagging all indexers with vpn tag ($VPN_TAG_ID)"
+elif [[ -n "$VPN_TAG_ID" ]]; then
+  api_get "$PROWLARR_URL/api/v1/indexer?apikey=$PROWLARR_KEY" \
+    | python3 -c "import sys,json;print('\n'.join(str(i['id']) for i in json.load(sys.stdin) if $VPN_TAG_ID not in i['tags']))" \
+    | while read -r IID; do
+        [[ -z "$IID" ]] && continue
+        BODY=$(api_get "$PROWLARR_URL/api/v1/indexer/$IID?apikey=$PROWLARR_KEY" \
+          | python3 -c "import sys,json;d=json.load(sys.stdin);d['tags']=sorted(set(d['tags'])|{$VPN_TAG_ID});print(json.dumps(d))")
+        S=$(curl -s -o /dev/null -w "%{http_code}" -X PUT -H "Content-Type: application/json" \
+          -d "$BODY" "$PROWLARR_URL/api/v1/indexer/$IID?apikey=$PROWLARR_KEY")
+        [[ "$S" == "202" || "$S" == "200" ]] && ok "Tagged indexer $IID → vpn" || fail "Tag indexer $IID ($S)"
+      done
 fi
 
 ###############################################################################

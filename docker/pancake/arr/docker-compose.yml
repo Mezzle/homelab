@@ -2,9 +2,9 @@
 # arr stack — pancake (laptop)
 #
 # Remote mounts are handled inside Docker (no host-level SSHFS/CIFS).
-# Prowlarr traffic is routed through a PIA VPN via gluetun.
+# Prowlarr indexer searches route through a PIA VPN via gluetun's HTTP proxy.
 # All services are exposed on Tailscale with automatic HTTPS.
-# Media stored on local HDD at /mnt/storage/media.
+# Media is served from the NAS over CIFS (see the nas-media volume).
 #
 # Required:
 #   - Copy .env.example to .env and fill in your values
@@ -127,7 +127,7 @@ services:
     logging: *default-logging
 
   ##########################################################################
-  # VPN: gluetun (PIA) — Prowlarr routes through this
+  # VPN: gluetun (PIA) — exposes an HTTP proxy on :8888 for Prowlarr
   ##########################################################################
   gluetun:
     image: qmcgaw/gluetun:latest
@@ -149,14 +149,10 @@ services:
       OPENVPN_USER: ${PIA_USER}
       OPENVPN_PASSWORD: ${PIA_PASS}
       SERVER_REGIONS: ${PIA_REGION:-Netherlands}
-    ports:
-      - 127.0.0.1:9696:9696
-    labels:
-      - "docktail.service.enable=true"
-      - "docktail.service.name=prowlarr"
-      - "docktail.service.port=9696"
-      - "docktail.service.service-port=443"
-      - "docktail.service.network=arr_arr"
+      # Built-in HTTP proxy on :8888 — Prowlarr tunnels indexer searches
+      # through this instead of sharing gluetun's network namespace.
+      HTTPPROXY: "on"
+      HTTPPROXY_LOG: "on"
     volumes:
       - ./config/gluetun:/gluetun:z
     healthcheck:
@@ -167,44 +163,34 @@ services:
     logging: *default-logging
 
   ##########################################################################
-  # FlareSolverr — Cloudflare challenge bypass for Prowlarr
-  ##########################################################################
-  flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
-    container_name: flaresolverr
-    restart: unless-stopped
-    <<: *security-opts
-    networks:
-      - arr
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-    environment:
-      <<: *common-env
-      LOG_LEVEL: info
-      CAPTCHA_SOLVER: none
-    healthcheck:
-      <<: *healthcheck-defaults
-      test: [ "CMD", "curl", "-f", "http://localhost:8191" ]
-    logging: *default-logging
-
-  ##########################################################################
-  # Prowlarr — network routed through gluetun VPN
+  # Prowlarr — on the arr network; searches proxied through gluetun:8888
+  #
+  # Proxy is applied per-indexer via a Prowlarr tag (see bootstrap.sh),
+  # so only tracker search/grab traffic tunnels — everything else is direct.
+  # depends_on is start-order only: if gluetun is down the UI and app-sync
+  # still work, only searches fail, so the two are no longer coupled.
   ##########################################################################
   prowlarr:
     image: ghcr.io/hotio/prowlarr:latest
     container_name: prowlarr
     restart: unless-stopped
     <<: *security-opts
-    network_mode: service:gluetun
+    networks:
+      - arr
     depends_on:
-      gluetun:
-        condition: service_healthy
+      - gluetun
     deploy:
       resources:
         limits:
           memory: 512M
+    ports:
+      - 9696:9696
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=prowlarr"
+      - "docktail.service.port=9696"
+      - "docktail.service.service-port=443"
+      - "docktail.service.network=arr_arr"
     environment:
       <<: *common-env
     volumes:
