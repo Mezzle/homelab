@@ -453,6 +453,7 @@ services:
     <<: *security-opts
     networks:
       lan:
+        ipv4_addres: 192.168.7.222
         mac_address: C0:8D:8E:DC:E7:5A
       arr: ~
     # --- GPU hardware transcoding (uncomment ONE section) ---
