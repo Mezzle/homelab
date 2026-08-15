@@ -1,10 +1,12 @@
 ##############################################################################
 # arr stack — pancake (laptop)
 #
-# Remote mounts are handled inside Docker (no host-level SSHFS/CIFS).
 # Prowlarr indexer searches route through a PIA VPN via gluetun's HTTP proxy.
 # All services are exposed on Tailscale with automatic HTTPS.
-# Media is served from the NAS over CIFS (see the nas-media volume).
+# Media and backups live on the NAS, mounted on the host by systemd CIFS
+# automounts (/var/mnt/nas/{media,backup}, see coreos/pancake.bu) and
+# bind-mounted into containers. The seedbox is still mounted in Docker
+# via rclone/SSHFS.
 #
 # Required:
 #   - Copy .env.example to .env and fill in your values
@@ -60,24 +62,6 @@ networks:
         - subnet: 192.168.4.0/22
           gateway: 192.168.4.1
           ip_range: 192.168.7.192/27
-
-##############################################################################
-# Volumes
-##############################################################################
-volumes:
-  nas-media:
-    driver: local
-    driver_opts:
-      type: cifs
-      device: //${NAS_HOST}/${NAS_SHARE}
-      o: "addr=${NAS_HOST},username=${NAS_USER},password=${NAS_PASS},uid=1001,gid=1001,iocharset=utf8,vers=3.0,file_mode=0777,dir_mode=0777,noperm,context=system_u:object_r:container_file_t:s0"
-
-  nas-backup:
-    driver: local
-    driver_opts:
-      type: cifs
-      device: //${NAS_HOST}/${NAS_BACKUP_SHARE}
-      o: "addr=${NAS_HOST},username=${NAS_USER},password=${NAS_PASS},uid=1001,gid=1001,iocharset=utf8,vers=3.0,file_mode=0777,dir_mode=0777,noperm,context=system_u:object_r:container_file_t:s0"
 
 ##############################################################################
 # Services
@@ -233,7 +217,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ./appdata/sonarr:/config:z
-      - nas-media:/data/media:Z
+      - /var/mnt/nas/media:/data/media:rslave
       - ./appdata/seedbox:/data/seedbox:ro
     healthcheck:
       <<: *healthcheck-defaults
@@ -272,7 +256,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ./appdata/radarr:/config:z
-      - nas-media:/data/media:Z
+      - /var/mnt/nas/media:/data/media:rslave
       - ./appdata/seedbox:/data/seedbox:ro
     healthcheck:
       <<: *healthcheck-defaults
@@ -311,7 +295,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ./appdata/bazarr:/config:z
-      - nas-media:/data/media:Z
+      - /var/mnt/nas/media:/data/media:rslave
     healthcheck:
       <<: *healthcheck-defaults
       test: [ "CMD", "curl", "-f", "http://localhost:6767/ping" ]
@@ -433,7 +417,7 @@ services:
     volumes:
       - ./appdata:/appdata:ro,z
       - ./scripts/backup.sh:/backup.sh:ro,z
-      - nas-backup:/nas:z
+      - /var/mnt/nas/backup:/nas:rslave
     entrypoint: /bin/sh
     command: >
       -c "
@@ -484,7 +468,7 @@ services:
       # NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
     volumes:
       - ./appdata/plex:/config:z
-      - nas-media:/media:ro,Z
+      - /var/mnt/nas/media:/media:ro,rslave
     healthcheck:
       <<: *healthcheck-defaults
       test: [ "CMD", "curl", "-f", "http://localhost:32400/identity" ]

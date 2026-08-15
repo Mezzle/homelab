@@ -321,6 +321,94 @@ systemd:
         WantedBy=local-fs.target
 
     ##################################################################
+    # NAS CIFS mounts — /var/mnt/nas/{media,backup,photos}
+    #
+    # Host-level systemd mounts, bind-mounted into containers. The
+    # docker local CIFS volume driver loses its mount under container
+    # churn and never remounts; systemd automount units re-establish
+    # the mount on next access and a NAS outage can't block boot.
+    #
+    # Credentials are NOT in git. Create these on the host (root:root,
+    # mode 0600), each containing username=/password= lines:
+    #   /etc/nas-arr.credentials      # NAS user for media + backup
+    #   /etc/nas-photos.credentials   # NAS user for photos
+    ##################################################################
+    - name: var-mnt-nas-media.mount
+      contents: |
+        [Unit]
+        Description=NAS media share (CIFS)
+        After=network-online.target
+        Wants=network-online.target
+
+        [Mount]
+        What=//192.168.5.103/Multimedia
+        Where=/var/mnt/nas/media
+        Type=cifs
+        Options=credentials=/etc/nas-arr.credentials,uid=1001,gid=1001,iocharset=utf8,vers=3.0,file_mode=0777,dir_mode=0777,noperm,context=system_u:object_r:container_file_t:s0,_netdev
+
+    - name: var-mnt-nas-media.automount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Automount NAS media share
+
+        [Automount]
+        Where=/var/mnt/nas/media
+
+        [Install]
+        WantedBy=remote-fs.target
+
+    - name: var-mnt-nas-backup.mount
+      contents: |
+        [Unit]
+        Description=NAS backup share (CIFS)
+        After=network-online.target
+        Wants=network-online.target
+
+        [Mount]
+        What=//192.168.5.103/backup
+        Where=/var/mnt/nas/backup
+        Type=cifs
+        Options=credentials=/etc/nas-arr.credentials,uid=1001,gid=1001,iocharset=utf8,vers=3.0,file_mode=0777,dir_mode=0777,noperm,context=system_u:object_r:container_file_t:s0,_netdev
+
+    - name: var-mnt-nas-backup.automount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Automount NAS backup share
+
+        [Automount]
+        Where=/var/mnt/nas/backup
+
+        [Install]
+        WantedBy=remote-fs.target
+
+    - name: var-mnt-nas-photos.mount
+      contents: |
+        [Unit]
+        Description=NAS photos share (CIFS)
+        After=network-online.target
+        Wants=network-online.target
+
+        [Mount]
+        What=//192.168.5.103/photos
+        Where=/var/mnt/nas/photos
+        Type=cifs
+        Options=credentials=/etc/nas-photos.credentials,uid=1000,gid=1000,iocharset=utf8,vers=3.0,file_mode=0755,dir_mode=0755,soft,context=system_u:object_r:container_file_t:s0,_netdev
+
+    - name: var-mnt-nas-photos.automount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Automount NAS photos share
+
+        [Automount]
+        Where=/var/mnt/nas/photos
+
+        [Install]
+        WantedBy=remote-fs.target
+
+    ##################################################################
     # uCore auto-rebase — switch from stock CoreOS to uCore
     #
     # Two-stage process on first boot:
@@ -420,8 +508,8 @@ systemd:
       contents: |
         [Unit]
         Description=arr media stack (docker compose)
-        After=docker.service network-online.target var-mnt-storage.mount
-        Requires=docker.service var-mnt-storage.mount
+        After=docker.service network-online.target var-mnt-storage.mount var-mnt-nas-media.automount var-mnt-nas-backup.automount
+        Requires=docker.service var-mnt-storage.mount var-mnt-nas-media.automount var-mnt-nas-backup.automount
         ConditionPathExists=/srv/docker/pancake/arr/docker-compose.yml
 
         [Service]
@@ -446,8 +534,8 @@ systemd:
       contents: |
         [Unit]
         Description=Immich photo management stack (docker compose)
-        After=docker.service network-online.target var-mnt-storage.mount
-        Requires=docker.service var-mnt-storage.mount
+        After=docker.service network-online.target var-mnt-storage.mount var-mnt-nas-photos.automount
+        Requires=docker.service var-mnt-storage.mount var-mnt-nas-photos.automount
         ConditionPathExists=/srv/docker/pancake/immich/docker-compose.yml
 
         [Service]

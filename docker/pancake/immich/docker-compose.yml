@@ -1,7 +1,8 @@
 ##############################################################################
 # Immich — self-hosted photo/video management with ML
 #
-# Photos stored on NAS via CIFS (nas-photos volume).
+# Photos live on the NAS, mounted on the host by a systemd CIFS automount
+# (/var/mnt/nas/photos, see coreos/pancake.bu) and bind-mounted in.
 # Hardware acceleration via extends files — swap backends by changing the
 # extends: service: line (nvenc, quicksync, vaapi, cpu, etc.)
 #
@@ -33,12 +34,6 @@ networks:
 volumes:
   immich-db:
   immich-model-cache:
-  nas-photos:
-    driver: local
-    driver_opts:
-      type: cifs
-      device: //${NAS_HOST}/${NAS_PHOTOS_SHARE}
-      o: "addr=${NAS_HOST},username=${NAS_PHOTOS_USER},password=${NAS_PHOTOS_PASS},uid=1000,gid=1000,iocharset=utf8,vers=3.0,file_mode=0755,dir_mode=0755,soft"
 
 services:
   ##########################################################################
@@ -84,7 +79,7 @@ services:
       DB_HOSTNAME: immich-db
       REDIS_HOSTNAME: immich-redis
     volumes:
-      - nas-photos:/data
+      - /var/mnt/nas/photos:/data:rslave
       - /etc/localtime:/etc/localtime:ro
     healthcheck:
       disable: false
