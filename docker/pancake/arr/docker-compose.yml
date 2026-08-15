@@ -321,7 +321,7 @@ services:
   # Recyclarr — syncs TRaSH Guides quality profiles on a schedule
   ##########################################################################
   recyclarr:
-    image: ghcr.io/recyclarr/recyclarr:latest
+    image: ghcr.io/recyclarr/recyclarr:edge
     container_name: recyclarr
     restart: unless-stopped
     <<: *security-opts

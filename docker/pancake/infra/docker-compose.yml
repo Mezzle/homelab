@@ -171,6 +171,7 @@ services:
       - infra
     security_opt:
       - no-new-privileges:true
+      - label:disable
     deploy:
       resources:
         limits:
