@@ -99,6 +99,15 @@ services:
       # VFS cache lives on the idle 1TB HDD, not the container's overlay layer.
       # In the overlay it filled the SSD (14GB observed) and was destroyed on
       # every `compose up -d`, restarting in-flight imports from zero.
+      #
+      # Measured pipeline, 2026-08-22 — do not "optimise" the seedbox leg:
+      #   seedbox -> pancake   64 MB/s 1 stream, 189 MB/s at 8 streams
+      #   HDD cache write      86 MB/s
+      #   pancake -> NAS       82.8 MB/s, IDENTICAL at 1 and 3 parallel writes
+      # The Unraid NAS is a hard ceiling that does not scale with parallelism,
+      # so extra seedbox streams (--vfs-read-chunk-streams) buy nothing
+      # end-to-end. A real import measured 78 MB/s = ~94% of that ceiling.
+      # Only a faster NAS moves this number.
       - /var/mnt/storage/cache/rclone:/cache
     command: >
       mount
