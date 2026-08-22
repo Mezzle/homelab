@@ -8,6 +8,11 @@
 # bind-mounted into containers. The seedbox is still mounted in Docker
 # via rclone/SSHFS.
 #
+# Every bind of a network mount into a container needs rslave propagation,
+# or the container holds a snapshot of the mount taken at start time and
+# never sees a remount. /data/seedbox lacked it and would have been left
+# holding a dead FUSE handle the first time rclone-seedbox restarted.
+#
 # Required:
 #   - Copy .env.example to .env and fill in your values
 #   - Place your seedbox SSH key at ./config/seedbox/id_rsa (or adjust path)
@@ -91,23 +96,34 @@ services:
     volumes:
       - ./appdata/seedbox:/mnt/seedbox:z,shared
       - ./config/seedbox:/config/seedbox:ro,z
+      # VFS cache lives on the idle 1TB HDD, not the container's overlay layer.
+      # In the overlay it filled the SSD (14GB observed) and was destroyed on
+      # every `compose up -d`, restarting in-flight imports from zero.
+      - /var/mnt/storage/cache/rclone:/cache
     command: >
       mount
         :sftp,host=${SEEDBOX_HOST},user=${SEEDBOX_USER},port=${SEEDBOX_PORT:-22},key_file=/config/seedbox/id_ed25519:${SEEDBOX_REMOTE_PATH}
         /mnt/seedbox
+        --cache-dir /cache
         --vfs-cache-mode full
-        --vfs-cache-max-size 2G
+        --vfs-cache-max-size 100G
+        --vfs-cache-max-age 24h
         --vfs-read-chunk-size 32M
         --vfs-read-chunk-size-limit 256M
+        --vfs-read-ahead 256M
         --allow-other
         --allow-non-empty
         --dir-cache-time 5m
         --poll-interval 30s
-        --transfers 4
         --log-level INFO
+    # statfs on the FUSE mount: returns ENOTCONN if rclone has died, but
+    # never makes a WAN round-trip. The old `ls` could time out on a link
+    # blip, which had autoheal restart rclone and break the arr imports.
     healthcheck:
       <<: *healthcheck-defaults
-      test: [ "CMD", "ls", "/mnt/seedbox" ]
+      test: [ "CMD", "stat", "-f", "/mnt/seedbox" ]
+      timeout: 20s
+      retries: 5
     logging: *default-logging
 
   ##########################################################################
@@ -187,6 +203,14 @@ services:
 
   ##########################################################################
   # Sonarr
+  #
+  # memory: 4G is deliberate. Imports sendfile() from the seedbox FUSE mount
+  # to the NAS over CIFS, and the dirty CIFS page cache is charged to this
+  # container's cgroup - not to the app's heap. At the old 1G ceiling that
+  # OOM-killed the app mid-import 143 times in two months (killed processes
+  # showed anon-rss:0kB). Paired with vm.dirty_bytes in
+  # coreos/os-configs/sysctl-90-arr-tuning.conf, which caps dirty pages so
+  # the page cache in here stays reclaimable.
   ##########################################################################
   sonarr:
     image: ghcr.io/hotio/sonarr:latest
@@ -203,7 +227,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 4G
     ports:
       - 8989:8989
     labels:
@@ -218,7 +242,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ./appdata/sonarr:/config:z
       - /var/mnt/nas/media:/data/media:rslave
-      - ./appdata/seedbox:/data/seedbox:ro
+      - ./appdata/seedbox:/data/seedbox:ro,rslave
     healthcheck:
       <<: *healthcheck-defaults
       test: [ "CMD", "curl", "-f", "http://localhost:8989/ping" ]
@@ -226,6 +250,14 @@ services:
 
   ##########################################################################
   # Radarr
+  #
+  # memory: 4G is deliberate. Imports sendfile() from the seedbox FUSE mount
+  # to the NAS over CIFS, and the dirty CIFS page cache is charged to this
+  # container's cgroup - not to the app's heap. At the old 1G ceiling that
+  # OOM-killed the app mid-import 143 times in two months (killed processes
+  # showed anon-rss:0kB). Paired with vm.dirty_bytes in
+  # coreos/os-configs/sysctl-90-arr-tuning.conf, which caps dirty pages so
+  # the page cache in here stays reclaimable.
   ##########################################################################
   radarr:
     image: ghcr.io/hotio/radarr:latest
@@ -242,7 +274,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 4G
     ports:
       - 7878:7878
     labels:
@@ -257,7 +289,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ./appdata/radarr:/config:z
       - /var/mnt/nas/media:/data/media:rslave
-      - ./appdata/seedbox:/data/seedbox:ro
+      - ./appdata/seedbox:/data/seedbox:ro,rslave
     healthcheck:
       <<: *healthcheck-defaults
       test: [ "CMD", "curl", "-f", "http://localhost:7878/ping" ]

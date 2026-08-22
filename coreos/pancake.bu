@@ -96,6 +96,12 @@ storage:
       user: { name: mez }
       group: { name: mez }
 
+    # rclone's seedbox VFS cache — on the HDD, not the container overlay
+    - path: /var/mnt/storage/cache/rclone
+      mode: 0755
+      user: { name: mez }
+      group: { name: mez }
+
   files:
     ##################################################################
     # speedtest-usb-routing.sh — installed as an executable script so
@@ -183,6 +189,14 @@ storage:
 
           # Immich / Elasticsearch requirement
           vm.max_map_count=262144
+
+          # Writeback thresholds — keep dirty pages bounded in absolute terms.
+          # The ratio defaults allow ~3GB dirty on a 16GB host, far more than
+          # any container cgroup, so dirty CIFS pages from an arr import filled
+          # the cgroup and OOM-killed the app before writeback ever throttled
+          # the writer. See coreos/os-configs/sysctl-90-arr-tuning.conf.
+          vm.dirty_bytes=268435456
+          vm.dirty_background_bytes=134217728
 
     ##################################################################
     # Kernel modules — loaded at boot
@@ -407,6 +421,44 @@ systemd:
 
         [Install]
         WantedBy=remote-fs.target
+
+    ##################################################################
+    # NAS mount health check — repairs stale CIFS mounts
+    #
+    # A CIFS mount can return ESTALE on its root while systemd still
+    # reports the unit active, so the .automount never re-triggers and
+    # nothing self-heals: arr imports and the backup container both fail
+    # silently. This timer detects that and remounts.
+    #
+    # The script lives in coreos/os-configs/pancake/ so it stays
+    # updatable via gitops-sync without reprovisioning the host.
+    ##################################################################
+    - name: nas-mount-check.service
+      contents: |
+        [Unit]
+        Description=Check and repair stale NAS CIFS mounts
+        After=docker.service
+        Wants=docker.service
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/sbin/nas-mount-check.sh
+        # Repair stops and restarts containers; give it room but never hang
+        TimeoutStartSec=600
+
+    - name: nas-mount-check.timer
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Periodically check NAS CIFS mounts
+
+        [Timer]
+        OnBootSec=5min
+        OnUnitActiveSec=5min
+        AccuracySec=30s
+
+        [Install]
+        WantedBy=timers.target
 
     ##################################################################
     # uCore auto-rebase — switch from stock CoreOS to uCore
