@@ -1,0 +1,87 @@
+##############################################################################
+# Agent stack — Hermes Agent (Nous Research)
+#
+# Operational agent for the homelab. Runs off-site on powder so it can still
+# observe (and report on) the on-site hosts when they are down.
+#
+# Interface is the web dashboard, published as a Tailscale Service by DockTail:
+#   https://hermes.<tailnet>.ts.net
+# There is no public ingress — the tailnet is the only way in, and the
+# dashboard's own basic-auth gate sits behind that.
+#
+# See docs/hermes-agent-plan.md for the phased trust model.
+#
+# Required:
+#   - DockTail running on this Docker host (see docker/powder/infra)
+#   - .env populated from 1Password (scripts/sync-secrets.sh)
+##############################################################################
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 60s
+
+networks:
+  agent:
+    driver: bridge
+
+services:
+  ##########################################################################
+  # Hermes Agent — dashboard / backend
+  #
+  # The container's main process is the dashboard, so container health and
+  # dashboard health are the same thing. `hermes serve` is the same server
+  # without the browser-opening behaviour; `dashboard --no-open` is what the
+  # upstream image supervises, so we match it.
+  #
+  # A non-loopback bind makes the auth gate mandatory — the server fails
+  # closed at startup if no auth provider is configured. PASSWORD_HASH is
+  # used rather than PASSWORD so no plaintext credential sits in .env.
+  ##########################################################################
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes
+    restart: unless-stopped
+    networks:
+      - agent
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+    ports:
+      - 9119:9119
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=hermes"
+      - "docktail.service.port=9119"
+      - "docktail.service.service-port=443"
+      # DockTail runs in the infra stack, so use the host-published port
+      # rather than trying to reach this stack's private Docker network.
+      - "docktail.service.direct=false"
+    environment:
+      TZ: Europe/London
+      # Own the data volume as the host `hermes` user (uid/gid 1002) rather
+      # than root or mez.
+      HERMES_UID: 1002
+      HERMES_GID: 1002
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${HERMES_DASHBOARD_BASIC_AUTH_USERNAME}
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH: ${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH}
+      # Stable signing key — without it sessions are invalidated on restart.
+      HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${HERMES_DASHBOARD_BASIC_AUTH_SECRET}
+      HERMES_DASHBOARD_PUBLIC_URL: https://hermes.corgi-justice.ts.net
+    command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open"]
+    volumes:
+      - ./appdata/hermes:/opt/data:z
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-fsS", "http://localhost:9119/api/status"]
+    logging: *default-logging
