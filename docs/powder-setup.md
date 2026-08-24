@@ -182,7 +182,17 @@ sudo systemctl reboot
 # After reboot, set up the service account token
 ssh mez@powder
 echo "OP_SERVICE_ACCOUNT_TOKEN=ops_xxxxx" | sudo tee /etc/1password-service-account.env
-sudo chmod 600 /etc/1password-service-account.env
+sudo chown root:mez /etc/1password-service-account.env
+sudo chmod 640 /etc/1password-service-account.env
+
+> **`op` must land in `/usr/local/bin`.** `rpm-ostree install` does not work on
+> powder — /boot has no room for a second deployment (see
+> `docs/hermes-agent-plan.md`), so the binary gets dropped in by hand. Put it in
+> `/usr/local/bin` (a symlink to `/var/usrlocal/bin`, and on systemd's PATH),
+> not `~/.local/bin`: `gitops-sync.service` runs with
+> `PATH=/usr/local/bin:/usr/bin` only, and if it can't find `op` it silently
+> falls back to the system SSH config, fails to authenticate to GitHub, and
+> still exits 0. That failure mode kept powder four months behind `main`.
 
 # Sync secrets for powder's stacks
 ./scripts/sync-secrets.sh docker/powder/infra
