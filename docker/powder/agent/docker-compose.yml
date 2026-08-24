@@ -34,16 +34,24 @@ networks:
 
 services:
   ##########################################################################
-  # Hermes Agent — dashboard / backend
+  # Hermes Agent — gateway + dashboard
   #
-  # The container's main process is the dashboard, so container health and
-  # dashboard health are the same thing. `hermes serve` is the same server
-  # without the browser-opening behaviour; `dashboard --no-open` is what the
-  # upstream image supervises, so we match it.
+  # The container's main process is the gateway; the dashboard runs beside it
+  # as a supervised s6 service, enabled by HERMES_DASHBOARD=1. This is the
+  # upstream single-container shape, and it is not optional: a dashboard-only
+  # container skips gateway supervision entirely (it detects its own role from
+  # PID 1 argv), so the gateway can neither run nor be started from the UI.
+  # Splitting them into two containers is supported only if they share a PID
+  # and network namespace, which buys nothing here.
   #
   # A non-loopback bind makes the auth gate mandatory — the server fails
-  # closed at startup if no auth provider is configured. PASSWORD_HASH is
-  # used rather than PASSWORD so no plaintext credential sits in .env.
+  # closed at startup if no auth provider is configured.
+  #
+  # The password is passed as plaintext rather than as the scrypt
+  # PASSWORD_HASH Hermes also accepts: Compose interpolates `$` in .env
+  # values, and a scrypt hash is `scrypt$N$r$p$salt$hash`, so the hash would
+  # arrive with its `$` segments eaten. .env is 0600 and already holds every
+  # other secret for this host in plaintext.
   ##########################################################################
   hermes:
     image: nousresearch/hermes-agent:latest
@@ -73,12 +81,18 @@ services:
       # than root or mez.
       HERMES_UID: 1002
       HERMES_GID: 1002
+      # Run the dashboard alongside the gateway. Host/port are pinned rather
+      # than left to the image defaults because the bind decides whether the
+      # auth gate engages at all — a loopback bind would silently disable it.
+      HERMES_DASHBOARD: 1
+      HERMES_DASHBOARD_HOST: 0.0.0.0
+      HERMES_DASHBOARD_PORT: 9119
       HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${HERMES_DASHBOARD_BASIC_AUTH_USERNAME}
       HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD}
       # Stable signing key — without it sessions are invalidated on restart.
       HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${HERMES_DASHBOARD_BASIC_AUTH_SECRET}
       HERMES_DASHBOARD_PUBLIC_URL: https://hermes.corgi-justice.ts.net
-    command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open"]
+    command: ["gateway", "run"]
     volumes:
       - ./appdata/hermes:/opt/data:z
     healthcheck:
