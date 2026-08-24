@@ -3,7 +3,9 @@
 A plan for introducing [Hermes Agent](https://github.com/NousResearch/hermes-agent)
 (Nous Research) as an operational agent for this homelab.
 
-**Status:** proposal, nothing deployed.
+**Status:** Phase 1 deployed on powder, 2026-08-24 — the dashboard is up and
+reachable; no scheduled tasks and no SSH access to other hosts yet.
+See `docs/powder-setup.md` for the operational detail.
 
 ---
 
@@ -18,6 +20,14 @@ independent failures. None of them were subtle, and none had been noticed:
 | NAS CIFS mounts stale (ESTALE) | days | systemd still reported the unit `active (mounted)` |
 | arr backups failing | since 18 Jun | Script died before it reached its own notify path |
 | `portainer-agent` on powder unhealthy | 2 weeks | Uptime Kuma checks reachability, not container health |
+| `gitops-sync` on powder failing every 5 min | since Jul | The unit failed before reaching its own notify path |
+
+That last row was found on 2026-08-24 while deploying the agent, and is worth
+dwelling on: powder's live unit had drifted to `ExecStart=/srv/scripts/gitops-sync.sh`,
+which SELinux blocks (`init_t` cannot exec a `var_t` file). `coreos/powder.bu`
+and pancake both use `ExecStart=/bin/bash /srv/scripts/…`, so the repo was
+right and only the live host was wrong. powder sat four months behind `main`
+while the timer reported `active (waiting)` the whole time.
 
 The homelab already has plenty of monitoring:
 
@@ -67,9 +77,16 @@ thing it watches.* An agent on pancake cannot tell you pancake is down. powder i
 already the external-monitoring host, it is off-site, it has idle capacity, and
 it is free.
 
-Caveat to verify first: powder is `aarch64`. Hermes is Python 3.11 + Node, so it
-should be fine, but confirm before committing — the install script has not been
-validated on ARM here.
+`aarch64` turned out to matter, but not the way this expected. The published
+image is multi-arch and runs fine; the *native* install is the thing that
+doesn't work on powder. `install.sh` hard-aborts without a C++ compiler
+(node-gyp builds node-pty), uCore ships `gcc` but not `g++`, and
+`rpm-ostree install gcc-c++` cannot help: /boot is 350M and a single aarch64
+deployment already uses 180M, so a second one has nowhere to go. That is also
+why powder's OS updates have been stuck since March.
+
+So Hermes runs as a container (`docker/powder/agent/`) rather than as a host
+install, which fits GitOps better anyway.
 
 ## How it fits GitOps — the hard constraint
 
@@ -103,10 +120,12 @@ very large blast radius. Treat trust as something it earns in phases.
 
 ### Non-negotiables
 
-1. **No inbound ports. No public exposure.** Use the Discord gateway
-   (outbound-only) as the sole interface. This sidesteps web-dashboard exposure
-   entirely — there is no dashboard to expose. Discord is already the
-   notification channel (`scripts/notify.sh`), so this fits.
+1. **No inbound ports. No public exposure.** As deployed, the dashboard is
+   reachable only as a Tailscale Service — nothing is published to the
+   internet, and the dashboard's own auth gate (mandatory on a non-loopback
+   bind) sits behind the tailnet. The Discord gateway remains the intended
+   channel for the digest itself, since it is outbound-only and
+   `scripts/notify.sh` already uses it.
 2. **Dedicated unprivileged user**, `hermes` — never `mez`. `mez` is in `wheel`
    with `NOPASSWD: ALL` and in `docker` (which is root-equivalent).
 3. **Never in the `docker` group.** Use the existing
@@ -145,11 +164,9 @@ Fix both **before** adding any agent user:
 Scope: SSH read-only to pancake, charm, powder. Discord gateway. No write access
 anywhere, no sudo beyond the allowlist.
 
-```bash
-# On powder, as a dedicated user
-sudo useradd -m -s /bin/bash hermes
-sudo -u hermes bash -c 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'
-```
+Deployed as `docker/powder/agent/`. The container owns its data volume as the
+unprivileged host user `hermes` (uid 1002), has no Docker socket and no sudo,
+and its only interface is the dashboard, published on the tailnet by DockTail.
 
 One scheduled task to start with — a daily health digest that answers the
 questions today's investigation had to ask by hand:
@@ -239,8 +256,8 @@ daily cadence is missing things.
 4. **Does the agent get NAS/Unraid visibility?** The NAS is a 2GB Unraid box
    with no agent capacity, so this would mean SMB/SNMP polling from powder, or
    nothing. Its health was a factor in two of the four failures above.
-5. **ARM validation** — confirm Hermes installs cleanly on `aarch64` before
-   committing to powder.
+5. ~~**ARM validation**~~ — settled: the container runs on `aarch64`; the
+   native install does not (see above).
 
 ## Success criteria
 

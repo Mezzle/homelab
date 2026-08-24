@@ -200,6 +200,7 @@ The systemd units should auto-start the stacks if the compose files exist. If th
 # Or individually
 /srv/docker/powder/infra/stack.sh up
 /srv/docker/powder/monitoring/stack.sh up
+/srv/docker/powder/agent/stack.sh up
 
 # Verify
 docker ps
@@ -208,6 +209,7 @@ docker ps
 You should see:
 - `docktail` + `portainer-agent` (infra)
 - `uptime-kuma` (monitoring)
+- `hermes` (agent)
 
 ## Step 6: Configure services
 
@@ -239,6 +241,34 @@ TAILNET=<your-tailnet> \
 
 This creates monitors for all services including keyword/JSON validation,
 MQTT broker checks, DNS resolution tests, and Tailscale ping.
+
+### Hermes Agent — first-time setup
+
+The dashboard is published as a Tailscale Service and is reachable at
+https://hermes.\<tailnet\>.ts.net. Credentials are in 1Password
+(`Homelab` → `docker.powder.agent`).
+
+The password is stored in `.env` in plaintext rather than as the scrypt
+`PASSWORD_HASH` Hermes also accepts. Compose interpolates `$` in `.env`
+values and a scrypt hash is `scrypt$N$r$p$salt$hash`, so the hash arrives in
+the container with its `$` segments eaten and every login fails with
+"Invalid credentials". Keep the password itself free of `$` too.
+
+No inference provider is configured by the stack — pick one from the
+dashboard, or from the container:
+
+```bash
+docker exec -it hermes hermes model    # provider + default model
+docker exec -it hermes hermes auth     # pooled provider credentials
+```
+
+Credentials land in `/opt/data` on the mounted volume, so they survive a
+container recreate or image update.
+
+To attach the Hermes desktop app: **Settings → Gateways → Remote gateway**,
+URL `https://hermes.\<tailnet\>.ts.net`, then sign in with the same
+credentials. The remote host becomes the execution boundary — agent tools,
+terminal commands, and file operations all run on powder, not on your laptop.
 
 ### Connect Portainer to the primary
 
@@ -297,6 +327,8 @@ powder (Oracle Cloud Always Free)
 ├── Tailscale exit node
 ├── docker/powder/infra/
 │   └── Portainer Agent (managed from pancake)
-└── docker/powder/monitoring/
-    └── Uptime Kuma (external monitoring of all services)
+├── docker/powder/monitoring/
+│   └── Uptime Kuma (external monitoring of all services)
+└── docker/powder/agent/
+    └── Hermes Agent (ops agent — see docs/hermes-agent-plan.md)
 ```
