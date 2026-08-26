@@ -97,15 +97,35 @@ done
 sleep 2
 for m in "${BROKEN[@]}"; do
   unit=$(systemd-escape -p --suffix=mount "$m")
-  systemctl start "$unit" >/dev/null 2>&1
+  systemctl start "$unit" 2>&1 | while read -r line; do log "mount $unit: $line"; done
 done
 sleep 2
 
 # Restart consumers regardless of the outcome — leaving them stopped would
 # turn a recoverable mount fault into an outage of the whole stack.
+# docker start can fail transiently (dockerd mid-churn after the batch stop
+# above, or a still-settling mount): retry and LOG failures — a silent
+# failure here left six containers down for an hour (2026-08-26 incident).
 if [[ ${#STOP[@]} -gt 0 ]]; then
   log "restarting consumers: ${STOP[*]}"
-  docker start "${STOP[@]}" >/dev/null 2>&1
+  FAILED=("${STOP[@]}")
+  for attempt in 1 2 3; do
+    [[ ${#FAILED[@]} -eq 0 ]] && break
+    OUT=$(docker start "${FAILED[@]}" 2>&1) || true
+    # docker start prints one line per container it successfully started.
+    mapfile -t NEXT < <(comm -23 <(printf '%s\n' "${FAILED[@]}" | sort) \
+                                  <(printf '%s\n' "$OUT" | sort -u))
+    if [[ ${#NEXT[@]} -gt 0 ]]; then
+      log "WARNING: attempt $attempt failed to start: ${NEXT[*]}"
+      [[ $attempt -lt 3 ]] && sleep $((attempt * 5))
+    fi
+    FAILED=("${NEXT[@]}")
+  done
+  if [[ ${#FAILED[@]} -gt 0 ]]; then
+    log "ERROR: could not restart after 3 attempts: ${FAILED[*]}"
+    notify critical "NAS repair: containers stuck down" \
+      "Mount(s) repaired but these containers failed to restart and are DOWN: ${FAILED[*]}. Manual intervention needed: docker start ${FAILED[*]}"
+  fi
 fi
 
 ###############################################################################

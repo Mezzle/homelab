@@ -377,6 +377,10 @@ services:
     image: tecnativa/docker-socket-proxy:latest
     container_name: socket-proxy
     restart: unless-stopped
+    # The socket must bypass the /run tmpfs (Alpine /var/run -> /run symlink
+    # shadowed it) and SELinux labeling (socket is container_var_run_t).
+    security_opt:
+      - label=disable
     networks:
       - socket-proxy
     deploy:
@@ -402,8 +406,11 @@ services:
       TASKS: 0
       SECRETS: 0
       CONFIGS: 0
+      # /run is a tmpfs (haproxy pidfile); /var/run symlinks to /run there,
+      # which shadowed the socket bind-mount. Serve it from /docker.sock.
+      SOCKET_PATH: /docker.sock
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/docker.sock:ro
     logging: *default-logging
 
   ##########################################################################
