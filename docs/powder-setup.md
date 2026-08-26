@@ -252,6 +252,48 @@ TAILNET=<your-tailnet> \
 This creates monitors for all services including keyword/JSON validation,
 MQTT broker checks, DNS resolution tests, and Tailscale ping.
 
+#### Background-container monitors (PUSH)
+
+Containers with no HTTP port to probe (recyclarr, rclone-seedbox, backup,
+speedtest, portainer, docktail on each host) are watched with Uptime Kuma
+**push** monitors instead. A per-host heartbeat script inspects each
+container's docker state/health and pings the matching push monitor only
+while it is up; if a container dies or goes unhealthy the ping stops and Kuma
+flips the monitor Down, firing both the Discord and Hermes-agent
+notifications. A dead heartbeat script (or a dead host) is itself an alert via
+Kuma's "No heartbeat in the time window".
+
+Create the monitors (idempotent — skips ones that already exist) and print
+their push tokens:
+
+```bash
+cd /srv/docker/powder/monitoring
+UPK_USER=.. UPK_PASS=.. ./scripts/.venv/bin/python scripts/add-container-monitors.py
+# or just re-print existing tokens:
+#   ... add-container-monitors.py --tokens
+```
+
+Deploy the heartbeat runner to each host (**must live in `/usr/local/sbin`**,
+not `/srv` — SELinux is Enforcing on the CoreOS hosts and only `bin_t`-typed
+paths are execable by systemd; a script under `/srv` gets `var_t` and fails
+with `203/EXEC`):
+
+```bash
+install -m 755 scripts/container-heartbeat.sh /usr/local/sbin/container-heartbeat.sh
+restorecon -v /usr/local/sbin/container-heartbeat.sh
+cp coreos/os-configs/common/container-heartbeat.{service,timer} /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now container-heartbeat.timer
+```
+
+The token map lives at `/srv/docker/<host>/monitoring/heartbeat-tokens.env`
+(one `container<TAB>pushtoken` per line, mode 600, NOT committed — it holds
+push tokens). The container name is the docker name, which may differ from the
+Kuma monitor name (e.g. `docktail` → the `docktail (pancake)` monitor).
+
+Note: `socket-proxy` (monitor 61) has its own pre-existing
+`socket-proxy-heartbeat.timer` and is deliberately NOT in the container
+heartbeat map — don't add it or it'll be pushed twice.
+
 ### Hermes Agent — first-time setup
 
 The dashboard is published as a Tailscale Service and is reachable at

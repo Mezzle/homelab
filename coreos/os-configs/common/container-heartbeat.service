@@ -1,0 +1,10 @@
+[Unit]
+Description=Push per-container health to Uptime Kuma
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/srv/scripts/container-heartbeat.sh
+# Keep going even if one host's Kuma is briefly unreachable; the timer retries.
+TimeoutStartSec=60

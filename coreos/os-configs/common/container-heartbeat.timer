@@ -1,0 +1,11 @@
+[Unit]
+Description=Run container-heartbeat every minute
+
+[Timer]
+# Every 60s. Push monitors use a 120s interval, so two pings per window gives
+# one retry of slack before Kuma declares "No heartbeat".
+OnCalendar=*:*:0
+Persistent=false
+
+[Install]
+WantedBy=timers.target
