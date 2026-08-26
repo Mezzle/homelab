@@ -31,3 +31,16 @@ fedora-coreos-43.20260301.3.1-oraclecloud.aarch64.qcow2
 # Uptime Kuma push tokens (per-host, deployed out-of-band)
 heartbeat-tokens.env
 **/heartbeat-tokens.env
+
+# Recyclarr runtime state (generated on each sync)
+**/config/recyclarr/logs/
+**/config/recyclarr/resources/
+**/config/recyclarr/state/
+**/config/recyclarr/settings.yml
+
+# Homepage runtime (generated config, user customizations stay local)
+**/config/homepage/logs/
+**/config/homepage/custom.css
+**/config/homepage/custom.js
+**/config/homepage/kubernetes.yaml
+**/config/homepage/proxmox.yaml
