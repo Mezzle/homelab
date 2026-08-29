@@ -86,3 +86,31 @@ services:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--no-check-certificate", "https://localhost:9001/ping"]
     logging: *default-logging
+
+  ##########################################################################
+  # Autoheal — restart containers that go unhealthy
+  #
+  # Watches every container with a healthcheck; restarts any that turns
+  # unhealthy (e.g. portainer-agent's API self-shutdown after 72h idle).
+  # Same pattern as pancake's arr stack.
+  ##########################################################################
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: autoheal
+    restart: unless-stopped
+    security_opt:
+      - label=disable
+    environment:
+      <<: *common-env
+      DOCKER_SOCK: /var/run/docker.sock
+      AUTOHEAL_CONTAINER_LABEL: all
+      AUTOHEAL_INTERVAL: 60
+      AUTOHEAL_START_PERIOD: 120
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: 10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    logging: *default-logging
