@@ -74,7 +74,7 @@ wait_for_service() {
       ok "$name is ready"
       return 0
     fi
-    ((attempt++))
+    attempt=$((attempt + 1))
     sleep 2
   done
   fail "$name not ready after $((max_attempts * 2))s"

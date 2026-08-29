@@ -125,7 +125,7 @@ backup_db() {
   else
     log "  WARN: $name backup failed (database may be locked), copying raw file"
     cp "$db_path" "$dest"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
   fi
 }
 
@@ -191,7 +191,7 @@ PRUNED=0
 while IFS= read -r old_backup; do
   [[ -z "$old_backup" ]] && continue
   rm -f "$old_backup"
-  ((PRUNED++))
+  PRUNED=$((PRUNED + 1))
 done < <(find "$BACKUP_DIR" -name "arr-backup-*.tar.gz" -mtime "+${RETENTION_DAYS}" 2>/dev/null)
 
 [[ $PRUNED -gt 0 ]] && log "Pruned $PRUNED old backup(s)"
