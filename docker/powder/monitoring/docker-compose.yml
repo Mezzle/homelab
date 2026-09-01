@@ -62,6 +62,10 @@ services:
       - "docktail.service.direct=false"
     volumes:
       - ./appdata/uptime-kuma:/app/data:z
+      # Discord now rejects Kuma's legacy timestamps and undefined field
+      # values. Keep a small, defensive provider override until upstream
+      # ships the equivalent fix.
+      - ./overrides/discord.js:/app/server/notification-providers/discord.js:ro,z
     healthcheck:
       <<: *healthcheck-defaults
       test: [ "CMD", "curl", "-f", "http://localhost:3001/" ]
