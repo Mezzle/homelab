@@ -93,14 +93,14 @@ services:
   ##########################################################################
   immich-ml:
     # For hardware acceleration, add suffix: -cuda, -rocm, -openvino, -armnn, -rknn
-    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}${IMMICH_ML_IMAGE_SUFFIX:--cuda}
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}${IMMICH_ML_IMAGE_SUFFIX-}
     container_name: immich-ml
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
     extends:
       file: hwaccel.ml.yml
-      service: ${IMMICH_ML_BACKEND:-cuda}
+      service: ${IMMICH_ML_BACKEND:-cpu}
     networks:
       immich:
         aliases:
