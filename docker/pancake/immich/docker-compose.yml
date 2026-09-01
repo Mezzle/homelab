@@ -102,7 +102,9 @@ services:
       file: hwaccel.ml.yml
       service: ${IMMICH_ML_BACKEND:-cuda}
     networks:
-      - immich
+      immich:
+        aliases:
+          - immich-machine-learning
     deploy:
       resources:
         limits:
