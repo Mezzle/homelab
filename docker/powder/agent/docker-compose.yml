@@ -67,6 +67,9 @@ services:
           memory: 3G
     ports:
       - 9119:9119
+      # Uptime Kuma posts alert webhooks here; the gateway delivers them to
+      # the configured Telegram home channel.
+      - 8644:8644
     labels:
       - "docktail.service.enable=true"
       - "docktail.service.name=hermes"
