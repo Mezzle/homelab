@@ -6,6 +6,10 @@
 # Hardware acceleration via extends files — swap backends by changing the
 # extends: service: line (nvenc, quicksync, vaapi, cpu, etc.)
 #
+# IMMICH_VERSION is pinned below rather than floating on `release`: the
+# server, ML and database images must move together and Immich ships
+# breaking changes in point releases. Diun reports new tags; bump here.
+#
 # Required:
 #   - Copy .env.example to .env and fill in your values
 #   - For NVIDIA: nvidia-container-toolkit installed on host
@@ -43,7 +47,7 @@ services:
   # Options: nvenc (NVIDIA), quicksync (Intel), vaapi, cpu
   ##########################################################################
   immich-server:
-    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
+    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-v3.1.0}
     container_name: immich-server
     restart: unless-stopped
     security_opt:
@@ -93,7 +97,7 @@ services:
   ##########################################################################
   immich-ml:
     # For hardware acceleration, add suffix: -cuda, -rocm, -openvino, -armnn, -rknn
-    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}${IMMICH_ML_IMAGE_SUFFIX-}
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-v3.1.0}${IMMICH_ML_IMAGE_SUFFIX-}
     container_name: immich-ml
     restart: unless-stopped
     security_opt:

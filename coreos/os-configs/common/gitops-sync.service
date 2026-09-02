@@ -1,0 +1,19 @@
+# Pull git and apply changes. Runs from gitops-sync.timer every 5 minutes.
+# Logs: journalctl -u gitops-sync.service -f
+[Unit]
+Description=GitOps sync — pull git and apply changes
+After=docker.service network-online.target
+Requires=network-online.target
+ConditionPathExists=/srv/.git
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv
+Environment=GITOPS_SERVER_DIR=docker/%H
+# /bin/bash prefix is required: SELinux blocks systemd (init_t) from
+# executing a var_t file under /srv directly (203/EXEC).
+ExecStart=/bin/bash /srv/scripts/gitops-sync.sh
+User=mez
+Group=mez
+# sudo for OS config file updates
+SupplementaryGroups=wheel

@@ -4,7 +4,7 @@ echo "  uCore — $(rpm-ostree status --booted | grep -oP 'Version: \K\S+' || ec
 echo "  Host: powder (Ampere A1 / Oracle Cloud)"
 echo "  Tailscale: $(tailscale ip --4 || echo 'not connected')"
 echo "  Cockpit:   https://localhost:9090"
-echo "  Stacks:    /srv/docker/powder/{infra,monitoring}"
+echo "  Stacks:    /srv/docker/powder/{infra,monitoring,agent}"
 echo "  Commands:  /srv/docker/powder/stacks.sh help"
 echo ""
 docker ps --format "  {{.Names}}\t{{.Status}}" 2>/dev/null | sort | head -20

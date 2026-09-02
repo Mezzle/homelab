@@ -53,6 +53,7 @@ notify() {
 if [[ -z "${DISCORD_WEBHOOK_URL:-}" ]]; then
   for f in /etc/discord-webhook.env "$HOME/.discord-webhook.env"; do
     if [[ -f "$f" ]]; then
+      # shellcheck disable=SC1090
       source "$f"
       break
     fi

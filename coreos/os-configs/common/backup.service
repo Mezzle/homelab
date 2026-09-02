@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up stack appdata and databases
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+# /bin/bash prefix: SELinux blocks direct exec of files under /srv (203/EXEC).
+ExecStart=/bin/bash /srv/scripts/backup-host.sh
+TimeoutStartSec=1800

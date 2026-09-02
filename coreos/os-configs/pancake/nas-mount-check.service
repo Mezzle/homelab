@@ -1,0 +1,13 @@
+# A CIFS mount can return ESTALE on its root while systemd still reports
+# the unit active, so the .automount never re-triggers. This detects that
+# and remounts. See nas-mount-check.sh.
+[Unit]
+Description=Check and repair stale NAS CIFS mounts
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/nas-mount-check.sh
+# Repair stops and restarts containers; give it room but never hang
+TimeoutStartSec=600

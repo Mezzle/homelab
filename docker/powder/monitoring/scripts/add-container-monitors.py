@@ -9,6 +9,11 @@ checks each container's docker state/health and pings the monitor's push URL
 only while it is healthy. If a container dies or goes unhealthy, the ping stops
 and Kuma flips the monitor Down -> fires the Discord + Hermes-agent webhooks.
 
+The same script pushes disk usage ("disk /var (host)" monitors, down at 90%;
+/ is composefs on Fedora CoreOS and always reads 100%, /var is the real disk),
+and backup-host.sh pushes once per nightly run ("host-backup (host)", 26h
+window). "backup" without a suffix is pancake's arr backup container.
+
 This script is idempotent: it creates each monitor only if a monitor of the
 same name does not already exist, attaches BOTH notifications (Discord=1,
 Hermes=2), places it under the right host group, and prints the push token for
@@ -38,10 +43,18 @@ UPK_TOTP = os.environ.get("UPK_TOTP", "")  # optional live 6-digit code
 
 TOKENS_ONLY = "--tokens" in sys.argv
 
-# Background containers to monitor, grouped by their host group name in Kuma.
-# interval = how often Kuma expects a heartbeat (seconds); the heartbeat cron
-# must run at least twice per interval. We use 120s interval / 60s cron.
-CONTAINER_MONITORS: dict[str, list[str]] = {
+# Push monitors to create, grouped by their host group name in Kuma. Each
+# entry is a name or a (name, interval) tuple. interval = how often Kuma
+# expects a heartbeat (seconds); the pusher must run at least twice per
+# interval. Containers and disks: 120s interval / 60s timer. Backups: once
+# a night, so a 26h window.
+#
+# Token map line names on the host (heartbeat-tokens.env):
+#   container name        -> its monitor
+#   disk:<mountpoint>     -> "disk <mountpoint> (<host>)"
+#   host-backup           -> "host-backup (<host>)"
+BACKUP_INTERVAL = 26 * 3600
+CONTAINER_MONITORS: dict[str, list] = {
     "pancake": [
         "recyclarr",
         "rclone-seedbox",
@@ -49,12 +62,19 @@ CONTAINER_MONITORS: dict[str, list[str]] = {
         "speedtest",
         "portainer",
         "docktail (pancake)",
+        "disk /var (pancake)",
+        "disk /var/mnt/storage (pancake)",
+        ("host-backup (pancake)", BACKUP_INTERVAL),
     ],
     "charm": [
         "docktail (charm)",
+        "disk /var (charm)",
+        ("host-backup (charm)", BACKUP_INTERVAL),
     ],
     "powder": [
         "docktail (powder)",
+        "disk /var (powder)",
+        ("host-backup (powder)", BACKUP_INTERVAL),
     ],
 }
 
@@ -95,7 +115,8 @@ def main() -> None:
             if grp not in group_id:
                 log(f"FAIL: group '{grp}' not found — skipping its monitors")
                 continue
-            for name in names:
+            for entry in names:
+                name, interval = entry if isinstance(entry, tuple) else (entry, PUSH_INTERVAL)
                 if name in by_name:
                     m = by_name[name]
                     if m.get("type") == "push":
@@ -108,7 +129,7 @@ def main() -> None:
                     result = api.add_monitor(
                         type=MonitorType.PUSH,
                         name=name,
-                        interval=PUSH_INTERVAL,
+                        interval=interval,
                         parent=group_id[grp],
                         notificationIDList=NOTIFICATION_IDS,
                     )

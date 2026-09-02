@@ -4,54 +4,39 @@
 # Hardware: Intel i7-5700HQ (4c/8t), 16GB RAM, 240GB SSD, 1TB HDD,
 #           NVIDIA GTX 970M
 #
-# Transpile to Ignition before use:
-#   butane --pretty --strict pancake.bu > pancake.ign
-#
-# Then either:
-#   - Provide pancake.ign at install time:
-#       coreos-installer install /dev/sda --ignition-file pancake.ign
-#   - Or serve it over HTTP for PXE/iPXE boot
+# Transpile with ./transpile.sh pancake.bu (pulls secrets from 1Password and
+# resolves the os-configs/ references), then either:
+#   - coreos-installer install /dev/sda --ignition-file pancake.ign
+#   - or serve pancake.ign over HTTP for PXE/iPXE boot
 #
 # After first boot:
 #   1. SSH in:  ssh mez@<ip>
-#   2. Find HDD device ID:
-#        ls -l /dev/disk/by-id/ | grep sdb   # or whatever the HDD is
-#      Then update var-mnt-storage.mount with the correct by-id path.
-#   3. Format HDD if needed:  sudo mkfs.ext4 /dev/disk/by-id/<YOUR-HDD-ID>
-#   4. Start storage mount:  sudo systemctl start var-mnt-storage.mount
-#   5. Run the bootstrap script:
-#        curl -sL https://raw.githubusercontent.com/mez-0/arr/main/scripts/bootstrap.sh \
+#   2. Confirm the HDD by-id path in var-mnt-storage.mount matches
+#      ls -l /dev/disk/by-id/ and that it is formatted (mkfs.ext4).
+#   3. Create /etc/nas-arr.credentials and /etc/nas-photos.credentials
+#      (root:root 0600, username=/password= lines).
+#   4. Run the bootstrap script:
+#        curl -sL https://raw.githubusercontent.com/Mezzle/homelab/main/scripts/bootstrap.sh \
 #          | bash -s -- docker/pancake
-#      Or manually: clone repo to /srv, then ./scripts/bootstrap.sh docker/pancake
 #
-# After that, just push to git — the gitops-sync timer pulls changes
-# every 5 minutes and applies them automatically.
+# After that, push to git — gitops-sync pulls every 5 minutes.
 #
-# First boot: the auto-rebase services switch from stock Fedora CoreOS
-# to uCore (stable-nvidia-lts), which includes Docker, NVIDIA drivers,
-# Tailscale, and cockpit out of the box. Two reboots occur automatically
-# (unsigned rebase → signed rebase), then the system is ready.
-#
+# First boot rebases stock Fedora CoreOS to uCore (two automatic reboots).
 # uCore image: ghcr.io/ublue-os/ucore-minimal:stable-nvidia-lts
-#   - Docker (moby-engine) + docker-compose
-#   - NVIDIA open drivers (LTS/580 series — Maxwell/Pascal support)
-#   - nvidia-container-toolkit (CDI)
-#   - Tailscale
-#   - Cockpit (web management)
-#   - Wireguard tools
+#   Docker + compose, NVIDIA open drivers (LTS, Maxwell support),
+#   nvidia-container-toolkit (CDI), Tailscale, Cockpit.
+#
+# Anything that gitops-sync should be able to update later lives in
+# coreos/os-configs/ and is referenced here with `local:` / `contents_local:`.
 ###############################################################################
 variant: fcos
 version: "1.7.0"
 
-########################################
-# Users
-########################################
 passwd:
   groups:
     - name: docker
   users:
     - name: mez
-      # Add your SSH public key(s) here
       ssh_authorized_keys:
         - ssh-ed25519 CHANGEME mez@laptop
       groups:
@@ -59,43 +44,35 @@ passwd:
         - wheel
       shell: /bin/bash
 
-########################################
-# Storage — directories and config files
-########################################
 storage:
   directories:
-    # Repo root — /srv is a symlink to /var/srv on FCOS
-    # Don't create subdirectories here; git clone provides them
+    # Repo root — /srv is a symlink to /var/srv on FCOS.
+    # Don't create subdirectories here; git clone provides them.
     - path: /var/srv
       mode: 0755
       user: { name: mez }
       group: { name: mez }
 
-    # HDD storage directories (created after mount)
-    # uCore auto-rebase tracking
     - path: /etc/ucore-autorebase
       mode: 0754
 
+    # HDD mount point and the directories containers expect on it
     - path: /var/mnt/storage
       mode: 0755
       user: { name: mez }
       group: { name: mez }
-
     - path: /var/mnt/storage/media
       mode: 0755
       user: { name: mez }
       group: { name: mez }
-
     - path: /var/mnt/storage/photos
       mode: 0755
       user: { name: mez }
       group: { name: mez }
-
     - path: /var/mnt/storage/cache
       mode: 0755
       user: { name: mez }
       group: { name: mez }
-
     # rclone's seedbox VFS cache — on the HDD, not the container overlay
     - path: /var/mnt/storage/cache/rclone
       mode: 0755
@@ -103,64 +80,12 @@ storage:
       group: { name: mez }
 
   files:
-    ##################################################################
-    # speedtest-usb-routing.sh — installed as an executable script so
-    # the systemd unit stays clean and doesn't need shell-quoting gymnastics.
-    ##################################################################
-    - path: /usr/local/sbin/speedtest-usb-routing.sh
-      mode: 0755
-      contents:
-        inline: |
-          #!/bin/bash
-          # Route br-speedtest and br-arr traffic via the 2.5G USB NIC (enp0s20u5).
-          # Idempotent — safe to re-run on a timer to self-heal after docker restarts.
-          set -eu
-
-          USB_IF=enp0s20u5
-          TABLE_ID=100
-          TABLE_NAME=usb
-          FWMARK=100
-          BRIDGES=(br-speedtest br-arr)
-
-          # Ensure the named routing table exists
-          grep -q "^${TABLE_ID} ${TABLE_NAME}\$" /etc/iproute2/rt_tables \
-            || echo "${TABLE_ID} ${TABLE_NAME}" >> /etc/iproute2/rt_tables
-
-          # Point the usb table's default route at the USB NIC's gateway.
-          # Prefer the default via USB_IF if one exists; else fall back to any default gw.
-          GW=$(ip route show default dev "${USB_IF}" | awk 'NR==1{print $3}')
-          if [ -z "${GW}" ]; then
-            GW=$(ip route show default | awk 'NR==1{print $3}')
-          fi
-          if [ -n "${GW}" ]; then
-            ip route replace default via "${GW}" dev "${USB_IF}" table "${TABLE_NAME}"
-          fi
-
-          # Policy rule: marked packets use the usb table
-          ip rule del fwmark "${FWMARK}" table "${TABLE_NAME}" 2>/dev/null || true
-          ip rule add fwmark "${FWMARK}" table "${TABLE_NAME}" priority 100
-
-          # Mark packets ingressing from each bridge (only if the bridge exists)
-          for br in "${BRIDGES[@]}"; do
-            ip link show "${br}" >/dev/null 2>&1 || continue
-            iptables -t mangle -D PREROUTING -i "${br}" -j MARK --set-mark "${FWMARK}" 2>/dev/null || true
-            iptables -t mangle -A PREROUTING -i "${br}" -j MARK --set-mark "${FWMARK}"
-          done
-
-    ##################################################################
-    # Hostname
-    ##################################################################
     - path: /etc/hostname
       mode: 0644
       contents:
         inline: pancake
 
-    ##################################################################
-    # Zincati — automatic OS update strategy
-    # Reboots only on Sundays between 04:00-05:00 UTC
-    # NOTE: Zincati may be inactive after uCore rebase. If so, use
-    # rpm-ostree upgrade via a systemd timer instead.
-    ##################################################################
+    # Zincati — reboot for OS updates only on Sundays 04:00-05:00 UTC.
     - path: /etc/zincati/config.d/55-updates-strategy.toml
       mode: 0644
       contents:
@@ -172,91 +97,16 @@ storage:
           start_time = "04:00"
           length_minutes = 60
 
-    ##################################################################
-    # Sysctl tuning
-    ##################################################################
-    - path: /etc/sysctl.d/90-pancake-tuning.conf
-      mode: 0644
-      contents:
-        inline: |
-          # inotify limits — arr apps and Immich watch many files
-          fs.inotify.max_user_watches=524288
-          fs.inotify.max_user_instances=512
-
-          # Network tuning for media streaming
-          net.core.rmem_max=4194304
-          net.core.wmem_max=4194304
-
-          # Immich / Elasticsearch requirement
-          vm.max_map_count=262144
-
-          # Writeback thresholds — keep dirty pages bounded in absolute terms.
-          # The ratio defaults allow ~3GB dirty on a 16GB host, far more than
-          # any container cgroup, so dirty CIFS pages from an arr import filled
-          # the cgroup and OOM-killed the app before writeback ever throttled
-          # the writer. See coreos/os-configs/sysctl-90-arr-tuning.conf.
-          vm.dirty_bytes=268435456
-          vm.dirty_background_bytes=134217728
-
-    ##################################################################
-    # Kernel modules — loaded at boot
-    ##################################################################
-    - path: /etc/modules-load.d/pancake.conf
-      mode: 0644
-      contents:
-        inline: |
-          fuse
-          tun
-
-    ##################################################################
-    # Docker daemon config
-    # NVIDIA GPU access is handled via CDI (Container Device Interface)
-    # by the uCore nvidia-container-toolkit — no runtime config needed.
-    ##################################################################
-    - path: /etc/docker/daemon.json
-      mode: 0644
-      contents:
-        inline: |
-          {
-            "log-driver": "json-file",
-            "log-opts": {
-              "max-size": "10m",
-              "max-file": "3"
-            },
-            "storage-driver": "overlay2",
-            "live-restore": true,
-            "default-address-pools": [
-              {"base": "172.20.0.0/14", "size": 24}
-            ]
-          }
-
-    ##################################################################
-    # Passwordless sudo for wheel group
-    ##################################################################
+    # Passwordless sudo for wheel (gitops-sync installs OS configs with sudo)
     - path: /etc/sudoers.d/wheel-nopasswd
       mode: 0440
       contents:
         inline: |
           %wheel ALL=(ALL) NOPASSWD: ALL
 
-    ##################################################################
-    # SSH hardening
-    ##################################################################
-    - path: /etc/ssh/sshd_config.d/50-hardening.conf
-      mode: 0600
-      contents:
-        inline: |
-          PasswordAuthentication no
-          PermitRootLogin no
-          MaxAuthTries 3
-          ClientAliveInterval 300
-          ClientAliveCountMax 2
-
-    ##################################################################
-    # Tailscale auth key — used by tailscale-auth.service on first boot
+    # Tailscale auth key — consumed and deleted by tailscale-auth.service.
     # Replace with a reusable + ephemeral key from:
     #   https://login.tailscale.com/admin/settings/keys
-    ##################################################################
     - path: /etc/tailscale-authkey
       mode: 0600
       contents:
@@ -264,43 +114,138 @@ storage:
           tskey-auth-CHANGEME
 
     ##################################################################
-    # MOTD — show useful info on login
+    # Files shared with gitops-sync (coreos/os-configs/manifest.conf).
+    # Same source on first boot and on every later change.
     ##################################################################
+    - path: /etc/sysctl.d/90-arr-tuning.conf
+      mode: 0644
+      contents:
+        local: os-configs/sysctl-90-arr-tuning.conf
+
+    - path: /etc/docker/daemon.json
+      mode: 0644
+      contents:
+        local: os-configs/docker-daemon.json
+
+    - path: /etc/ssh/sshd_config.d/50-hardening.conf
+      mode: 0600
+      contents:
+        local: os-configs/sshd-50-hardening.conf
+
     - path: /etc/profile.d/motd.sh
       mode: 0755
       contents:
-        inline: |
-          #!/bin/bash
-          echo ""
-          echo "  uCore — $(rpm-ostree status --booted | grep -oP 'Version: \K\S+' || echo 'unknown')"
-          echo "  Host: pancake (i7-5700HQ / 16GB / GTX 970M)"
-          echo "  Tailscale: $(tailscale ip --4 || echo 'not connected')"
-          echo "  Cockpit:   https://localhost:9090"
-          echo "  Stacks:    /srv/docker/pancake/{arr,immich,music,infra}"
-          echo "  Commands:  /srv/docker/pancake/stacks.sh help"
-          echo ""
-          docker ps --format "  {{.Names}}\t{{.Status}}" 2>/dev/null | sort | head -20
-          TOTAL=$(docker ps -q 2>/dev/null | wc -l)
-          [ "$TOTAL" -gt 20 ] && echo "  ... and $((TOTAL - 20)) more"
-          echo ""
+        local: os-configs/pancake/motd.sh
 
-########################################
-# Systemd units
-########################################
+    - path: /etc/modules-load.d/pancake.conf
+      mode: 0644
+      contents:
+        inline: |
+          fuse
+          tun
+
+    - path: /usr/local/sbin/nas-mount-check.sh
+      mode: 0755
+      contents:
+        local: os-configs/pancake/nas-mount-check.sh
+
+    - path: /usr/local/sbin/speedtest-usb-routing.sh
+      mode: 0755
+      contents:
+        local: os-configs/pancake/speedtest-usb-routing.sh
+
 systemd:
   units:
-    ##################################################################
-    # Enable Docker
-    ##################################################################
     - name: docker.service
       enabled: true
 
     ##################################################################
-    # HDD storage mount — /var/mnt/storage
+    # uCore auto-rebase — switch from stock CoreOS to uCore
     #
-    # IMPORTANT: Replace the device path below with the actual
-    # /dev/disk/by-id/ path for your 1TB HDD. Find it with:
-    #   ls -l /dev/disk/by-id/ | grep -v part
+    # Two-stage process on first boot:
+    #   1. Rebase to unsigned uCore image → reboot
+    #   2. Rebase to signed uCore image → reboot
+    ##################################################################
+    - name: ucore-unsigned-autorebase.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=uCore autorebase to unsigned OCI and reboot
+        ConditionPathExists=!/etc/ucore-autorebase/unverified
+        ConditionPathExists=!/etc/ucore-autorebase/signed
+        After=network-online.target
+        Wants=network-online.target
+
+        [Service]
+        Type=oneshot
+        StandardOutput=journal+console
+        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal:stable-nvidia-lts
+        ExecStart=/usr/bin/touch /etc/ucore-autorebase/unverified
+        ExecStart=/usr/bin/systemctl disable ucore-unsigned-autorebase.service
+        ExecStart=/usr/bin/systemctl reboot
+
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: ucore-signed-autorebase.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=uCore autorebase to signed OCI and reboot
+        ConditionPathExists=/etc/ucore-autorebase/unverified
+        ConditionPathExists=!/etc/ucore-autorebase/signed
+        After=network-online.target
+        Wants=network-online.target
+
+        [Service]
+        Type=oneshot
+        StandardOutput=journal+console
+        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-image-signed:docker://ghcr.io/ublue-os/ucore-minimal:stable-nvidia-lts
+        ExecStart=/usr/bin/touch /etc/ucore-autorebase/signed
+        ExecStart=/usr/bin/systemctl disable ucore-signed-autorebase.service
+        ExecStart=/usr/bin/systemctl reboot
+
+        [Install]
+        WantedBy=multi-user.target
+
+    ##################################################################
+    # Tailscale — host-level tailnet connectivity (SSH, DNS, identity).
+    # Per-service HTTPS is handled by DockTail in each host's infra stack.
+    ##################################################################
+    - name: tailscaled.service
+      enabled: true
+
+    - name: tailscale-auth.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Authenticate Tailscale on first boot
+        After=tailscaled.service network-online.target
+        Requires=tailscaled.service
+        ConditionPathExists=/etc/tailscale-authkey
+        ConditionPathExists=!/var/lib/tailscale-auth-done
+
+        [Service]
+        Type=oneshot
+        ExecStart=/bin/bash -c '\
+          tailscale up \
+            --authkey=$(cat /etc/tailscale-authkey | tr -d "[:space:]") \
+            --hostname=pancake \
+            --ssh && \
+          touch /var/lib/tailscale-auth-done && \
+          rm -f /etc/tailscale-authkey'
+        TimeoutStartSec=60
+
+        [Install]
+        WantedBy=multi-user.target
+
+    # Cockpit web UI, socket-activated: https://pancake:9090
+    - name: cockpit.socket
+      enabled: true
+
+    ##################################################################
+    # HDD storage mount — /var/mnt/storage
+    # The by-id path is substituted by transpile.sh from 1Password.
     ##################################################################
     - name: var-mnt-storage.mount
       enabled: true
@@ -337,13 +282,13 @@ systemd:
     ##################################################################
     # NAS CIFS mounts — /var/mnt/nas/{media,backup,photos}
     #
-    # Host-level systemd mounts, bind-mounted into containers. The
+    # Host-level systemd automounts, bind-mounted into containers. The
     # docker local CIFS volume driver loses its mount under container
-    # churn and never remounts; systemd automount units re-establish
-    # the mount on next access and a NAS outage can't block boot.
+    # churn and never remounts; automounts re-establish on next access
+    # and a NAS outage can't block boot.
     #
-    # Credentials are NOT in git. Create these on the host (root:root,
-    # mode 0600), each containing username=/password= lines:
+    # Credentials are NOT in git. Create on the host (root:root 0600),
+    # each with username=/password= lines:
     #   /etc/nas-arr.credentials      # NAS user for media + backup
     #   /etc/nas-photos.credentials   # NAS user for photos
     ##################################################################
@@ -423,381 +368,80 @@ systemd:
         WantedBy=remote-fs.target
 
     ##################################################################
-    # NAS mount health check — repairs stale CIFS mounts
-    #
-    # A CIFS mount can return ESTALE on its root while systemd still
-    # reports the unit active, so the .automount never re-triggers and
-    # nothing self-heals: arr imports and the backup container both fail
-    # silently. This timer detects that and remounts.
-    #
-    # The script lives in coreos/os-configs/pancake/ so it stays
-    # updatable via gitops-sync without reprovisioning the host.
+    # Docker Compose stacks — one stack@ instance per directory under
+    # /srv/docker/pancake/. Mount and ordering dependencies are drop-ins
+    # in os-configs/pancake/stack@<name>.service.d/.
+    ##################################################################
+    - name: stack@.service
+      contents_local: os-configs/common/stack@.service
+
+    - name: stack@arr.service
+      enabled: true
+      dropins:
+        - name: mounts.conf
+          contents_local: os-configs/pancake/stack@arr.service.d/mounts.conf
+
+    - name: stack@immich.service
+      enabled: true
+      dropins:
+        - name: mounts.conf
+          contents_local: os-configs/pancake/stack@immich.service.d/mounts.conf
+
+    - name: stack@music.service
+      enabled: true
+      dropins:
+        - name: order.conf
+          contents_local: os-configs/pancake/stack@music.service.d/order.conf
+
+    - name: stack@speedtest.service
+      enabled: true
+
+    - name: stack@infra.service
+      enabled: true
+      dropins:
+        - name: order.conf
+          contents_local: os-configs/pancake/stack@infra.service.d/order.conf
+
+    ##################################################################
+    # pancake-only timers (scripts + units live in os-configs/pancake/)
     ##################################################################
     - name: nas-mount-check.service
-      contents: |
-        [Unit]
-        Description=Check and repair stale NAS CIFS mounts
-        After=docker.service
-        Wants=docker.service
-
-        [Service]
-        Type=oneshot
-        ExecStart=/usr/local/sbin/nas-mount-check.sh
-        # Repair stops and restarts containers; give it room but never hang
-        TimeoutStartSec=600
-
+      contents_local: os-configs/pancake/nas-mount-check.service
     - name: nas-mount-check.timer
       enabled: true
-      contents: |
-        [Unit]
-        Description=Periodically check NAS CIFS mounts
+      contents_local: os-configs/pancake/nas-mount-check.timer
 
-        [Timer]
-        OnBootSec=5min
-        OnUnitActiveSec=5min
-        AccuracySec=30s
-
-        [Install]
-        WantedBy=timers.target
-
-    ##################################################################
-    # uCore auto-rebase — switch from stock CoreOS to uCore
-    #
-    # Two-stage process on first boot:
-    #   1. Rebase to unsigned uCore image → reboot
-    #   2. Rebase to signed uCore image → reboot
-    # After both reboots, Docker + NVIDIA + Tailscale are available.
-    #
-    # GTX 970M is Maxwell — requires nvidia-lts (580 series) drivers.
-    ##################################################################
-    - name: ucore-unsigned-autorebase.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=uCore autorebase to unsigned OCI and reboot
-        ConditionPathExists=!/etc/ucore-autorebase/unverified
-        ConditionPathExists=!/etc/ucore-autorebase/signed
-        After=network-online.target
-        Wants=network-online.target
-
-        [Service]
-        Type=oneshot
-        StandardOutput=journal+console
-        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal:stable-nvidia-lts
-        ExecStart=/usr/bin/touch /etc/ucore-autorebase/unverified
-        ExecStart=/usr/bin/systemctl disable ucore-unsigned-autorebase.service
-        ExecStart=/usr/bin/systemctl reboot
-
-        [Install]
-        WantedBy=multi-user.target
-
-    - name: ucore-signed-autorebase.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=uCore autorebase to signed OCI and reboot
-        ConditionPathExists=/etc/ucore-autorebase/unverified
-        ConditionPathExists=!/etc/ucore-autorebase/signed
-        After=network-online.target
-        Wants=network-online.target
-
-        [Service]
-        Type=oneshot
-        StandardOutput=journal+console
-        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-image-signed:docker://ghcr.io/ublue-os/ucore-minimal:stable-nvidia-lts
-        ExecStart=/usr/bin/touch /etc/ucore-autorebase/signed
-        ExecStart=/usr/bin/systemctl disable ucore-signed-autorebase.service
-        ExecStart=/usr/bin/systemctl reboot
-
-        [Install]
-        WantedBy=multi-user.target
-
-    ##################################################################
-    # Tailscale — host-level tailnet connectivity
-    #
-    # Provides: SSH via tailnet hostname, DNS resolution, machine identity.
-    # Per-service HTTPS is still handled by sidecar containers.
-    ##################################################################
-    - name: tailscaled.service
-      enabled: true
-
-    - name: tailscale-auth.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=Authenticate Tailscale on first boot
-        After=tailscaled.service network-online.target
-        Requires=tailscaled.service
-        ConditionPathExists=/etc/tailscale-authkey
-        ConditionPathExists=!/var/lib/tailscale-auth-done
-
-        [Service]
-        Type=oneshot
-        ExecStart=/bin/bash -c '\
-          tailscale up \
-            --authkey=$(cat /etc/tailscale-authkey | tr -d "[:space:]") \
-            --hostname=pancake \
-            --ssh && \
-          touch /var/lib/tailscale-auth-done && \
-          rm -f /etc/tailscale-authkey'
-        TimeoutStartSec=60
-
-        [Install]
-        WantedBy=multi-user.target
-
-    ##################################################################
-    # Cockpit — web-based system management (socket-activated)
-    # Access via https://pancake:9090 or Tailscale
-    ##################################################################
-    - name: cockpit.socket
-      enabled: true
-
-    ##################################################################
-    # arr stack — auto-start on boot
-    ##################################################################
-    - name: arr-stack.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=arr media stack (docker compose)
-        After=docker.service network-online.target var-mnt-storage.mount var-mnt-nas-media.automount var-mnt-nas-backup.automount
-        Requires=docker.service var-mnt-storage.mount var-mnt-nas-media.automount var-mnt-nas-backup.automount
-        ConditionPathExists=/srv/docker/pancake/arr/docker-compose.yml
-
-        [Service]
-        Type=oneshot
-        RemainAfterExit=yes
-        WorkingDirectory=/srv/docker/pancake/arr
-        ExecStartPre=/usr/bin/docker compose pull --quiet
-        ExecStart=/usr/bin/docker compose up -d --remove-orphans
-        ExecStop=/usr/bin/docker compose down
-        TimeoutStartSec=300
-        User=mez
-        Group=mez
-
-        [Install]
-        WantedBy=multi-user.target
-
-    ##################################################################
-    # immich stack — auto-start on boot
-    ##################################################################
-    - name: immich-stack.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=Immich photo management stack (docker compose)
-        After=docker.service network-online.target var-mnt-storage.mount var-mnt-nas-photos.automount
-        Requires=docker.service var-mnt-storage.mount var-mnt-nas-photos.automount
-        ConditionPathExists=/srv/docker/pancake/immich/docker-compose.yml
-
-        [Service]
-        Type=oneshot
-        RemainAfterExit=yes
-        WorkingDirectory=/srv/docker/pancake/immich
-        ExecStartPre=/usr/bin/docker compose pull --quiet
-        ExecStart=/usr/bin/docker compose up -d --remove-orphans
-        ExecStop=/usr/bin/docker compose down
-        TimeoutStartSec=300
-        User=mez
-        Group=mez
-
-        [Install]
-        WantedBy=multi-user.target
-
-    ##################################################################
-    # music stack — auto-start on boot
-    ##################################################################
-    - name: music-stack.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=Music stack (docker compose)
-        After=docker.service network-online.target var-mnt-storage.mount
-        Requires=docker.service var-mnt-storage.mount
-        ConditionPathExists=/srv/docker/pancake/music/docker-compose.yml
-
-        [Service]
-        Type=oneshot
-        RemainAfterExit=yes
-        WorkingDirectory=/srv/docker/pancake/music
-        ExecStartPre=/usr/bin/docker compose pull --quiet
-        ExecStart=/usr/bin/docker compose up -d --remove-orphans
-        ExecStop=/usr/bin/docker compose down
-        TimeoutStartSec=300
-        User=mez
-        Group=mez
-
-        [Install]
-        WantedBy=multi-user.target
-
-    ##################################################################
-    # infra stack — auto-start on boot
-    ##################################################################
-    - name: infra-stack.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=Infrastructure stack (docker compose)
-        After=docker.service network-online.target var-mnt-storage.mount
-        Requires=docker.service var-mnt-storage.mount
-        ConditionPathExists=/srv/docker/pancake/infra/docker-compose.yml
-
-        [Service]
-        Type=oneshot
-        RemainAfterExit=yes
-        WorkingDirectory=/srv/docker/pancake/infra
-        ExecStartPre=/usr/bin/docker compose pull --quiet
-        ExecStart=/usr/bin/docker compose up -d --remove-orphans
-        ExecStop=/usr/bin/docker compose down
-        TimeoutStartSec=300
-        User=mez
-        Group=mez
-
-        [Install]
-        WantedBy=multi-user.target
-
-
-    ##################################################################
-    # Speedtest USB routing — send br-speedtest traffic via enp0s20u5
-    #
-    # Marks packets entering from the speedtest and *arr Docker bridges
-    # and routes them via the 2.5Gb USB NIC. Docker's masquerade then
-    # sources them from enp0s20u5's IP, so those flows egress via USB.
-    #
-    # A companion timer re-applies the rules every 5 minutes because:
-    #   - Docker restarts (weekly prune, compose up) flush mangle rules
-    #     and its own bridges, which would remove any static config.
-    #   - The commands are idempotent (delete-then-add), so re-running
-    #     is safe and self-healing.
-    ##################################################################
     - name: speedtest-usb-routing.service
       enabled: true
-      contents: |
-        [Unit]
-        Description=Route speedtest Docker bridge traffic via USB NIC (enp0s20u5)
-        After=network-online.target docker.service
-        Wants=network-online.target docker.service
-
-        [Service]
-        Type=oneshot
-        RemainAfterExit=no
-        ExecStart=/usr/local/sbin/speedtest-usb-routing.sh
-
-        [Install]
-        WantedBy=multi-user.target
-
+      contents_local: os-configs/pancake/speedtest-usb-routing.service
     - name: speedtest-usb-routing.timer
       enabled: true
-      contents: |
-        [Unit]
-        Description=Re-apply speedtest USB routing periodically (self-heal after docker restarts)
-
-        [Timer]
-        OnBootSec=1min
-        OnUnitActiveSec=5min
-        Unit=speedtest-usb-routing.service
-
-        [Install]
-        WantedBy=timers.target
+      contents_local: os-configs/pancake/speedtest-usb-routing.timer
 
     ##################################################################
-    # Weekly container image cleanup
-    ##################################################################
-    - name: docker-prune.service
-      enabled: false
-      contents: |
-        [Unit]
-        Description=Prune unused Docker images and build cache
-
-        [Service]
-        Type=oneshot
-        ExecStart=/usr/bin/docker system prune -af --filter "until=168h"
-
-    - name: docker-prune.timer
-      enabled: true
-      contents: |
-        [Unit]
-        Description=Run Docker prune weekly
-
-        [Timer]
-        OnCalendar=Sun 05:30
-        Persistent=true
-        RandomizedDelaySec=600
-
-        [Install]
-        WantedBy=timers.target
-
-    ##################################################################
-    # GitOps sync — pull from git and apply changes automatically
-    #
-    # Runs every 5 minutes. If docker-compose.yml/config changes,
-    # runs `docker compose up -d`. If OS config files change in
-    # coreos/os-configs/, copies them into /etc/ and reloads.
-    #
-    # Logs: journalctl -u gitops-sync.service -f
+    # Shared units from coreos/os-configs/common/. gitops-sync keeps
+    # them current after install; see manifest.conf.
     ##################################################################
     - name: gitops-sync.service
-      enabled: false
-      contents: |
-        [Unit]
-        Description=GitOps sync — pull git and apply changes
-        After=docker.service network-online.target
-        Requires=network-online.target
-        ConditionPathExists=/srv/.git
-
-        [Service]
-        Type=oneshot
-        WorkingDirectory=/srv
-        Environment=GITOPS_SERVER_DIR=docker/pancake
-        ExecStart=/bin/bash /srv/scripts/gitops-sync.sh
-        User=mez
-        Group=mez
-        # Allow sudo for OS config file updates
-        SupplementaryGroups=wheel
-
+      contents_local: os-configs/common/gitops-sync.service
     - name: gitops-sync.timer
       enabled: true
-      contents: |
-        [Unit]
-        Description=GitOps sync — poll git every 5 minutes
+      contents_local: os-configs/common/gitops-sync.timer
 
-        [Timer]
-        OnBootSec=2min
-        OnUnitActiveSec=5min
-        RandomizedDelaySec=30
-
-        [Install]
-        WantedBy=timers.target
-
-    ##################################################################
-    # Automatic container updates check (logs only, doesn't restart)
-    # Pairs with Diun if you add it later
-    ##################################################################
-    - name: docker-update-check.service
-      enabled: false
-      contents: |
-        [Unit]
-        Description=Check for Docker image updates
-
-        [Service]
-        Type=oneshot
-        ExecStart=/bin/bash -c '\
-          for d in /srv/docker/pancake/arr /srv/docker/pancake/immich /srv/docker/pancake/music /srv/docker/pancake/infra; do \
-            [ -f "$$d/docker-compose.yml" ] && \
-            echo "=== $$(basename $$d) ===" && \
-            /usr/bin/docker compose -f $$d/docker-compose.yml pull --dry-run 2>&1 | grep -v "up to date"; \
-          done; true'
-
-    - name: docker-update-check.timer
+    - name: docker-prune.service
+      contents_local: os-configs/common/docker-prune.service
+    - name: docker-prune.timer
       enabled: true
-      contents: |
-        [Unit]
-        Description=Check for Docker image updates daily
+      contents_local: os-configs/common/docker-prune.timer
 
-        [Timer]
-        OnCalendar=daily
-        Persistent=true
-        RandomizedDelaySec=3600
+    - name: container-heartbeat.service
+      contents_local: os-configs/common/container-heartbeat.service
+    - name: container-heartbeat.timer
+      enabled: true
+      contents_local: os-configs/common/container-heartbeat.timer
 
-        [Install]
-        WantedBy=timers.target
+    - name: backup.service
+      contents_local: os-configs/common/backup.service
+    - name: backup.timer
+      enabled: true
+      contents_local: os-configs/common/backup.timer

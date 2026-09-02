@@ -39,7 +39,9 @@ services:
   # would miss.
   ##########################################################################
   uptime-kuma:
-    image: louislam/uptime-kuma:latest
+    # Pinned to the 1.x line: 2.0 changes the database and the API the
+    # seed scripts use. Diun reports new tags; bump deliberately.
+    image: louislam/uptime-kuma:1
     container_name: uptime-kuma
     restart: unless-stopped
     networks:
@@ -50,8 +52,10 @@ services:
       resources:
         limits:
           memory: 256M
+    # powder has a public IP; bind to the Tailscale address. The heartbeat
+    # scripts push to http://powder:3001, which resolves to that address.
     ports:
-      - 3001:3001
+      - ${TAILSCALE_IP:-0.0.0.0}:3001:3001
     labels:
       - "docktail.service.enable=true"
       - "docktail.service.name=uptime-kuma"
