@@ -46,6 +46,32 @@ networks:
 
 services:
   ##########################################################################
+  # Cloudflare Tunnel — public DNS-over-HTTPS connector
+  #
+  # The tunnel's public hostname should route dns.mez.run to
+  # http://adguard:80. Run another connector for the same tunnel beside the
+  # Raspberry Pi primary to make the endpoint survive either host failing.
+  ##########################################################################
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-doh
+    profiles: [public-doh]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_DOH_TUNNEL_TOKEN:-}
+    networks:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    depends_on:
+      adguard:
+        condition: service_healthy
+    logging: *default-logging
+
+  ##########################################################################
   # AdGuard Home — backup DNS instance
   # Kept in sync with the primary on the Raspberry Pi via adguard-sync
   #
@@ -63,6 +89,10 @@ services:
         mac_address: 02:A3:F7:1C:6E:4B
     security_opt:
       - no-new-privileges:true
+    # Loopback-only backend for `tailscale serve --service=svc:dns` on charm.
+    # This does not expose AdGuard on the LAN or Internet.
+    ports:
+      - "127.0.0.1:3080:80"
     deploy:
       resources:
         limits:

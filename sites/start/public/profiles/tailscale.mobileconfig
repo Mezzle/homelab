@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>DNSSettings</key>
+      <dict>
+        <key>DNSProtocol</key>
+        <string>HTTPS</string>
+        <key>ServerURL</key>
+        <string>https://dns.corgi-justice.ts.net/dns-query</string>
+      </dict>
+      <key>OnDemandRules</key>
+      <array>
+        <dict>
+          <key>Action</key>
+          <string>Connect</string>
+        </dict>
+      </array>
+      <key>PayloadDescription</key>
+      <string>Use the private tailnet AdGuard Home DNS-over-HTTPS service.</string>
+      <key>PayloadDisplayName</key>
+      <string>corgi-justice private DNS</string>
+      <key>PayloadIdentifier</key>
+      <string>run.mez.dns.settings</string>
+      <key>PayloadType</key>
+      <string>com.apple.dnsSettings.managed</string>
+      <key>PayloadUUID</key>
+      <string>06317266-7094-4E26-97F6-46E8BA782D3B</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+    </dict>
+  </array>
+  <key>PayloadDescription</key>
+  <string>Routes DNS through the redundant corgi-justice tailnet AdGuard service using DNS over HTTPS.</string>
+  <key>PayloadDisplayName</key>
+  <string>corgi-justice private DNS</string>
+  <key>PayloadIdentifier</key>
+  <string>run.mez.dns</string>
+  <key>PayloadOrganization</key>
+  <string>mez.run</string>
+  <key>PayloadRemovalDisallowed</key>
+  <false/>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadUUID</key>
+  <string>765DB1CC-1D67-45D4-9EDC-003680211207</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+</dict>
+</plist>

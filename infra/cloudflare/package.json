@@ -1,0 +1,17 @@
+{
+  "name": "homelab-cloudflare",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "preview": "pulumi preview",
+    "up": "pulumi up"
+  },
+  "dependencies": {
+    "@pulumi/cloudflare": "^6.0.0",
+    "@pulumi/pulumi": "^3.170.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}
