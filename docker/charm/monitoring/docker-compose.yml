@@ -53,7 +53,8 @@ services:
   # Raspberry Pi primary to make the endpoint survive either host failing.
   ##########################################################################
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    # Pin the multi-arch manifest; update this deliberately after testing.
+    image: cloudflare/cloudflared:2026.8.0@sha256:2535e54b16adf1d50630f99d0886471926c5ef3f6b328100ec6589f731c48969
     container_name: cloudflared-doh
     profiles: [public-doh]
     restart: unless-stopped

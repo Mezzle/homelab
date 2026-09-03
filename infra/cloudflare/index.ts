@@ -8,24 +8,15 @@ const zoneName = config.get("zoneName") ?? "mez.run";
 const enablePublicDns = config.getBoolean("enablePublicDns") ?? false;
 const enableStartSite = config.getBoolean("enableStartSite") ?? true;
 
-const tunnelSecret = config.getSecret("tunnelSecret");
-
-// The tunnel is deliberately opt-in until the public endpoint has been
-// reviewed. The tunnel secret never appears in a plain Pulumi output.
-const dohTunnel = enablePublicDns && tunnelSecret
+// Remote-managed tunnels do not need a tunnel secret. The connector token is
+// issued by Cloudflare separately and is intentionally not managed here.
+const dohTunnel = enablePublicDns
   ? new cloudflare.ZeroTrustTunnelCloudflared("dohTunnel", {
       accountId,
       name: "mez-doh",
       configSrc: "cloudflare",
-      tunnelSecret,
     })
   : undefined;
-
-if (enablePublicDns && !dohTunnel) {
-  throw new pulumi.RunError(
-    "enablePublicDns=true requires the Pulumi secret tunnelSecret",
-  );
-}
 
 if (dohTunnel && enablePublicDns) {
   new cloudflare.ZeroTrustTunnelCloudflaredConfig("dohTunnelConfig", {

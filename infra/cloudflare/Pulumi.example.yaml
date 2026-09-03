@@ -4,6 +4,3 @@ config:
   homelab-cloudflare:zoneName: mez.run
   homelab-cloudflare:enablePublicDns: "false"
   homelab-cloudflare:enableStartSite: "true"
-  # A base64-encoded 32-byte secret. Store the real value as a Pulumi secret.
-  # homelab-cloudflare:tunnelSecret:
-  #   secure: replace-with-secret

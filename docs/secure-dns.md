@@ -20,20 +20,30 @@ the name does not belong to either machine and Tailscale can route around a
 failed host.
 
 MagicDNS and HTTPS certificates must be enabled for the tailnet. They are
-enabled by default on current tailnets.
+enabled by default on current tailnets. Tailscale Services require Tailscale
+v1.86.0 or newer, an Owner/Admin/Network admin to define the service, and
+tag-based identities on every service host. The current host bootstrap uses a
+user identity, so do not run the commands below until you have planned the
+tagged service-host reauthentication. A tagged device cannot also retain a
+user identity.
 
 ## 1. Allow reverse-proxied DoH in AdGuard
 
-On both hosts, stop AdGuard and set this field in `AdGuardHome.yaml`:
+On both hosts, stop AdGuard and set this current AdGuard Home field in
+`AdGuardHome.yaml`:
 
 ```yaml
-tls:
-  allow_unencrypted_doh: true
+http:
+  doh:
+    insecure_enabled: true
 ```
 
-Keep the other existing `tls` fields unchanged, then start AdGuard. The client
-connection uses HTTPS. This setting permits HTTP only on the local hop between
-Tailscale Serve and AdGuard.
+Keep the other existing `http` and `tls` fields unchanged, then start AdGuard.
+The client connection uses HTTPS. This setting permits HTTP only on the local
+hop between Tailscale Serve and AdGuard. On a native Pi installation, bind the
+AdGuard HTTP listener to loopback. On `charm`, the Compose mapping already binds
+the backend to `127.0.0.1:3080`. Do not enable the optional public Cloudflare
+connector while testing this private path.
 
 ## 2. Advertise the service from charm
 
@@ -47,7 +57,9 @@ sudo tailscale set --accept-dns=false
 sudo tailscale serve --service=svc:dns --https=443 127.0.0.1:3080
 ```
 
-Approve the service host in the Tailscale admin console if prompted.
+The command requires `charm` to be authenticated with a tag such as
+`tag:dns-host`, not a user identity. Define `svc:dns`, add the service-host
+tag, and approve the advertisement in the Tailscale admin console first.
 
 ## 3. Advertise the same service from the Pi
 
@@ -62,14 +74,19 @@ sudo tailscale serve --service=svc:dns --https=443 127.0.0.1:80
 `accept-dns=false` belongs on the DNS servers only. Normal clients should keep
 accepting the tailnet DNS configuration.
 
-Approve the Pi as another host for `svc:dns`.
+The Pi also needs a tagged identity and Tailscale v1.86.0 or newer. Approve it
+as another host for `svc:dns`.
 
 ## 4. Limit access with Tailscale policy
 
-Grant access only to your tailnet members:
+Grant access only to your tailnet members. The service itself should be tagged
+and its hosts should be auto-approved or approved manually:
 
 ```json
 {
+  "tagOwners": {
+    "tag:dns-host": ["autogroup:admin"]
+  },
   "grants": [
     {
       "src": ["autogroup:member"],

@@ -12,13 +12,6 @@
         <key>ServerURL</key>
         <string>https://dns.corgi-justice.ts.net/dns-query</string>
       </dict>
-      <key>OnDemandRules</key>
-      <array>
-        <dict>
-          <key>Action</key>
-          <string>Connect</string>
-        </dict>
-      </array>
       <key>PayloadDescription</key>
       <string>Use the private tailnet AdGuard Home DNS-over-HTTPS service.</string>
       <key>PayloadDisplayName</key>
