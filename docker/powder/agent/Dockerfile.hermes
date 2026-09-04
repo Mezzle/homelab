@@ -1,0 +1,13 @@
+# Temporary derived image for coalesced webhook incident sessions.
+#
+# The upstream image is pinned because webhook.py is a source-level override.
+# When upgrading Hermes, rebase the override against the new upstream file,
+# run hermes-patches/test_webhook_coalescing.py, then update this digest.
+FROM nousresearch/hermes-agent@sha256:289711e8ca75dd4b75d1c393c775f62592a3df8f6d06a237984af49fe7f4ba2c
+
+COPY hermes-patches/webhook.py /opt/hermes/gateway/platforms/webhook.py
+COPY hermes-patches/test_webhook_coalescing.py /tmp/test_webhook_coalescing.py
+RUN /opt/hermes/.venv/bin/python -m py_compile /opt/hermes/gateway/platforms/webhook.py \
+    && HERMES_WEBHOOK_MODULE=/opt/hermes/gateway/platforms/webhook.py \
+       /opt/hermes/.venv/bin/python /tmp/test_webhook_coalescing.py \
+    && rm /tmp/test_webhook_coalescing.py

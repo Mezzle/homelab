@@ -3,11 +3,11 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 case "${1:-help}" in
-  up)       docker compose up -d ;;
+  up)       docker compose up -d --build ;;
   down)     docker compose down ;;
   restart)  docker compose restart ${2:-} ;;
-  pull)     docker compose pull ;;
-  update)   docker compose pull && docker compose up -d --remove-orphans ;;
+  pull)     docker compose pull --ignore-buildable ;;
+  update)   docker compose pull --ignore-buildable && docker compose up -d --build --remove-orphans ;;
   logs)     docker compose logs -f --tail=100 ${2:-} ;;
   status)   docker ps --filter "label=com.docker.compose.project=agent" --format "table {{.Names}}\t{{.Status}}" | sort ;;
   help|*)

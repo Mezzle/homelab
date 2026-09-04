@@ -20,8 +20,10 @@
 # Ignition files (generated from .bu)
 coreos/*.ign
 
-# Python virtualenvs
+# Python virtualenvs and bytecode
 **/.venv/
+**/__pycache__/
+*.py[cod]
 
 # OS junk
 .DS_Store

@@ -1,0 +1,11 @@
+# Never send runtime state or secrets to the Docker build daemon.
+appdata/
+.env
+.env.*
+
+# The derived image needs only the override source.
+*
+!Dockerfile.hermes
+!hermes-patches/
+!hermes-patches/webhook.py
+!hermes-patches/test_webhook_coalescing.py

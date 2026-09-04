@@ -54,7 +54,13 @@ services:
   # other secret for this host in plaintext.
   ##########################################################################
   hermes:
-    image: nousresearch/hermes-agent:latest
+    # Temporary derived image adding coalesced webhook incident sessions.
+    # Dockerfile.hermes pins the compatible upstream digest; rebase the
+    # override before changing it.
+    build:
+      context: .
+      dockerfile: Dockerfile.hermes
+    image: homelab/hermes-agent:webhook-coalescing
     container_name: hermes
     restart: unless-stopped
     networks:
