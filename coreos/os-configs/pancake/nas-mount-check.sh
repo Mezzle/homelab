@@ -36,10 +36,16 @@ else
   notify() { :; }
 fi
 
-# A healthy mount answers stat immediately. ESTALE fails fast; a wedged
-# mount hangs, which the timeout turns into a failure too.
+# A healthy mount is (a) actually a CIFS mountpoint and (b) answers stat
+# immediately. stat alone is NOT enough: when a NAS outage kills the
+# automount units (autofs pipe hangup, 2026-09-04), the paths are left as
+# empty plain directories that stat answers happily — the check then
+# reported "all mounts healthy" and never repaired once the NAS returned.
+# findmnt with -t cifs verifies the mount itself exists; the stat catches
+# wedged/ESTALE mounts that hang or fail fast.
 mount_ok() {
-  timeout "$STAT_TIMEOUT" stat -c '%i' "$1" >/dev/null 2>&1
+  timeout "$STAT_TIMEOUT" findmnt -rn -t cifs -T "$1" >/dev/null 2>&1 \
+    && timeout "$STAT_TIMEOUT" stat -c '%i' "$1" >/dev/null 2>&1
 }
 
 # Containers bind-mounting a path keep its superblock alive.
