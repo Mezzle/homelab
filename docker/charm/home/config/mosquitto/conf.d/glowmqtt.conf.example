@@ -1,0 +1,16 @@
+# Copy to glowmqtt.conf and replace the two credentials locally.
+# This file is intentionally not tracked: it contains Bright credentials.
+connection glowmqtt
+address glowmqtt.energyhive.com:8883
+bridge_cafile /etc/ssl/certs/ca-certificates.crt
+bridge_tls_version tlsv1.2
+bridge_protocol_version mqttv311
+cleansession true
+start_type automatic
+notifications false
+try_private false
+remote_username YOUR_BRIGHT_USERNAME
+remote_password YOUR_BRIGHT_PASSWORD
+
+# Republish the upstream GlowStick snapshot unchanged on the local broker.
+topic SMART/HILD/84F3EB17FC10 in 0

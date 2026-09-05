@@ -14,8 +14,9 @@
 # Gluetun state
 **/config/gluetun/
 
-# Mosquitto passwords (generated, contains hashes)
+# Mosquitto passwords and upstream bridge credentials
 **/config/mosquitto/password_file
+**/config/mosquitto/conf.d/glowmqtt.conf
 
 # Ignition files (generated from .bu)
 coreos/*.ign
