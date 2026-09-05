@@ -81,6 +81,19 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
 └── README.md
 ```
 
+### Projects in this repository
+
+This is a small monorepo. The host runtime remains under `coreos/` and
+`docker/`, while independently deployed projects live under:
+
+| Project | Purpose | Deploy with |
+|---|---|---|
+| `infra/cloudflare` | Tunnel, DNS rules, and the `start.mez.run` Pages domain | `pulumi preview` / `pulumi up` |
+| `sites/start` | Static setup page and Apple configuration profiles | Cloudflare Pages / Wrangler |
+
+The Cloudflare Pulumi project keeps the public endpoint disabled by default.
+The Tailscale-only DNS path does not require a Cloudflare deployment.
+
 Each stack follows the same pattern:
 
 ```
