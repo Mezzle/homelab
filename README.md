@@ -30,17 +30,14 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
                                 │
          ┌──────────────────────┼──────────────────────┐
          │                      │                      │
-   ┌───────────┐  ┌──────────────────────────┐  ┌──────────┐
-   │  powder   │  │         Other            │  │ Clients  │
-   │  (OCI)    │  │                          │  │ phones,  │
-   │  Ampere   │  │  Dell — Home Assistant   │  │ laptops  │
-   │  A1 ARM   │  │  Pi — AdGuard (primary)  │  │          │
-   │           │  │                          │  │          │
-   │ Uptime    │  └──────────────────────────┘  └──────────┘
-   │  Kuma     │
-   │           │
-   │           │
-   └───────────┘
+   ┌───────────┐  ┌──────────┐  ┌──────────────────────────┐
+   │  powder   │  │  watch   │  │         Other            │
+   │  OCI A1   │  │ OCI E2   │  │                          │
+   │  Ubuntu   │  │ Ubuntu   │  │  Dell — Home Assistant   │
+   │           │  │          │  │  Pi — AdGuard (primary)  │
+   │ Remote    │  │ Uptime   │  │                          │
+   │ dev       │  │ Kuma     │  └──────────────────────────┘
+   └───────────┘  └──────────┘
      Oracle Cloud
      Always Free
 ```
@@ -51,7 +48,7 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
 ├── coreos/                          # OS provisioning
 │   ├── pancake.bu              #   Laptop — Butane config
 │   ├── charm.bu               #   Mac Mini — Butane config
-│   ├── powder.bu              #   Oracle Cloud ARM — Butane config
+│   ├── legacy/powder.bu       #   Retired Oracle ARM CoreOS config
 │   ├── os-configs/                  #   Live-updatable OS configs
 │   │   ├── sysctl-90-arr-tuning.conf
 │   │   ├── docker-daemon.json
@@ -68,12 +65,16 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
 │   │   ├── infra/                   #     Portainer agent
 │   │   ├── home/                    #     MQTT, Zigbee, MySQL
 │   │   └── monitoring/              #     AdGuard + AG Sync
-│   └── powder/                #   Oracle Cloud stacks
-│       ├── infra/                   #     Portainer agent
-│       └── monitoring/              #     Uptime Kuma
+│   ├── legacy/powder/         #   Retired Portainer and Hermes stacks
+│   └── watch/                 #   Oracle micro monitoring
+│       └── monitoring/        #     Uptime Kuma
+├── cloud/
+│   ├── powder/                #   Ubuntu ARM dev-host provisioning
+│   └── watch/                 #   Ubuntu micro provisioning
 ├── docs/
 │   ├── 1password-setup.md           #   Secrets reference & verification
-│   └── powder-setup.md              #   Oracle Cloud deployment guide
+│   ├── oracle-reprovision.md        #   Monitoring migration and rebuild
+│   └── legacy/powder-coreos-setup.md
 ├── scripts/
 │   ├── gitops-sync.sh               #   Auto-pull + apply from git
 │   ├── sync-secrets.sh              #   1Password → .env sync
@@ -102,7 +103,7 @@ stack-name/
 ```bash
 # 1. On your laptop, transpile the Butane config
 cd coreos
-./transpile.sh pancake.bu    # or charm.bu, powder.bu
+./transpile.sh pancake.bu    # or charm.bu
 
 # 2. Install Fedora CoreOS on the target machine
 coreos-installer install /dev/sda --ignition-file pancake.ign
@@ -327,12 +328,12 @@ After deployment, all services are accessible via Tailscale with automatic HTTPS
 | Zigbee2MQTT | `https://z2m.<tailnet>.ts.net` |
 | AdGuard Home | `https://adguard-backup.<tailnet>.ts.net` |
 
-### powder (Oracle Cloud — ARM)
+### Oracle Cloud
 
 | Service | Tailnet URL |
 |---|---|
-| Portainer (agent) | `https://portainer-powder.<tailnet>.ts.net` |
-| Uptime Kuma | `https://uptime-kuma.<tailnet>.ts.net` |
+| Uptime Kuma (`watch`) | `https://watch.<tailnet>.ts.net` |
+| Remote development (`powder`) | SSH through Tailscale |
 
 ### Other
 
@@ -345,13 +346,14 @@ After deployment, all services are accessible via Tailscale with automatic HTTPS
 
 ## OS management
 
-All machines run [uCore](https://github.com/ublue-os/ucore), an opinionated Fedora CoreOS image with Docker, Tailscale, and cockpit pre-installed.
+The two home servers run [uCore](https://github.com/ublue-os/ucore), an opinionated Fedora CoreOS image with Docker, Tailscale, and cockpit pre-installed.
 
 - **pancake:** `ucore-minimal:stable-nvidia-lts` (NVIDIA LTS drivers for Maxwell GPU)
 - **charm:** `ucore-minimal:stable`
-- **powder:** `ucore-minimal:stable` (aarch64 / ARM)
+- **powder:** Ubuntu Server 24.04 ARM64, configured by `cloud/powder`
+- **watch:** Ubuntu Server 24.04 x86_64, configured by `cloud/watch`
 
-On first boot, the Butane config auto-rebases from stock CoreOS to uCore (two reboots). After that, Docker, Tailscale, and cockpit are available immediately.
+The uCore rebase instructions below apply only to `pancake` and `charm`.
 
 ### Updates
 

@@ -7,7 +7,7 @@ Run once after Uptime Kuma is deployed and you've created an account:
     python scripts/seed-uptime-kuma.py
 
 Required env vars:
-    UPK_URL   — Uptime Kuma URL (default: https://uptime-kuma.${TAILNET}.ts.net)
+    UPK_URL   — Uptime Kuma URL (default: https://watch.${TAILNET}.ts.net)
     UPK_USER  — admin username
     UPK_PASS  — admin password
     TAILNET   — Tailscale tailnet name
@@ -37,7 +37,7 @@ RESET = "--reset" in sys.argv
 # ── Configuration ────────────────────────────────────────────────────────────
 
 TAILNET = os.environ.get("TAILNET", "")
-UPK_URL = os.environ.get("UPK_URL", f"https://uptime-kuma.{TAILNET}.ts.net")
+UPK_URL = os.environ.get("UPK_URL", f"https://watch.{TAILNET}.ts.net")
 UPK_USER = os.environ.get("UPK_USER", "")
 UPK_PASS = os.environ.get("UPK_PASS", "")
 
@@ -49,7 +49,7 @@ MYSQL_DB = os.environ.get("MYSQL_DB", "homeassistant")
 
 if not all([UPK_USER, UPK_PASS, TAILNET]):
     print("Usage: UPK_USER=admin UPK_PASS=password TAILNET=tail1234 python seed-uptime-kuma.py")
-    print("  UPK_URL defaults to https://uptime-kuma.<TAILNET>.ts.net")
+    print("  UPK_URL defaults to https://watch.<TAILNET>.ts.net")
     print()
     print("Optional (for deep checks):")
     print("  MQTT_USER / MQTT_PASS   — Mosquitto broker auth")
@@ -183,25 +183,26 @@ GROUPS: dict[str, list[dict]] = {
     ],
 
     # ═══════════════════════════════════════════════════════════════════════
-    # powder — Monitoring, Infra (Oracle Cloud)
+    # Oracle Cloud hosts
     # ═══════════════════════════════════════════════════════════════════════
-    "powder": [
+    "watch": [
         dict(
             type=MonitorType.HTTP,
             name="Uptime Kuma",
-            url=f"https://uptime-kuma.{TS}",
-            interval=60,
-        ),
-        dict(
-            type=MonitorType.PORT,
-            name="Portainer Agent (powder)",
-            hostname=f"portainer-powder.{TS}",
-            port=9001,
+            url=f"https://watch.{TS}",
             interval=60,
         ),
         dict(
             type=MonitorType.PING,
-            name="powder (host)",
+            name="watch (host)",
+            hostname=f"watch.{TS}",
+            interval=120,
+        ),
+    ],
+    "powder": [
+        dict(
+            type=MonitorType.PING,
+            name="powder (dev host)",
             hostname=f"powder.{TS}",
             interval=120,
         ),

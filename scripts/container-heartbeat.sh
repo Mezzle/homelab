@@ -16,7 +16,7 @@
 #   - running, no healthcheck          -> push status=up  (running is all we have)
 #
 # A container going Down stops nothing here — Kuma flips the monitor and fires
-# the Discord + Hermes-agent webhooks. Kuma's own "No heartbeat in the time
+# the configured notifications. Kuma's own "No heartbeat in the time
 # window" also covers the case where THIS host or cron dies (the push simply
 # stops), so a dead heartbeat script is itself an alert.
 #
@@ -27,13 +27,14 @@
 # it may differ from the Kuma monitor name (e.g. "docktail" here maps to the
 # "docktail (pancake)" monitor's token).
 #
-# Kuma push endpoint base is KUMA_PUSH_BASE (default http://powder:3001).
+# Kuma push endpoint base is KUMA_PUSH_BASE. It defaults to watch over
+# Tailscale HTTPS; set TAILNET if the tailnet DNS suffix changes.
 #
 # Deployed via the repo; run by container-heartbeat cron/timer every 60s.
 ###############################################################################
 set -uo pipefail
 
-KUMA_PUSH_BASE="${KUMA_PUSH_BASE:-http://powder:3001}"
+KUMA_PUSH_BASE="${KUMA_PUSH_BASE:-https://watch.${TAILNET:-corgi-justice.ts.net}}"
 TOKEN_MAP="${TOKEN_MAP:-}"
 CURL_TIMEOUT=10
 
@@ -41,7 +42,7 @@ log() { echo "[container-heartbeat] $*"; }
 
 # Locate the token map if not given explicitly: try each host's monitoring dir.
 if [[ -z "$TOKEN_MAP" ]]; then
-  for h in pancake charm powder; do
+  for h in pancake charm powder watch; do
     cand="/srv/docker/$h/monitoring/heartbeat-tokens.env"
     [[ -f "$cand" ]] && { TOKEN_MAP="$cand"; break; }
   done

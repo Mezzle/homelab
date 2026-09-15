@@ -1,0 +1,69 @@
+#cloud-config
+hostname: powder
+manage_etc_hosts: true
+
+users:
+  - default
+  - name: mez
+    gecos: Mez
+    groups: [adm, sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ssh-ed25519 CHANGEME mez@laptop
+
+ssh_pwauth: false
+disable_root: true
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - gh
+  - gnupg
+  - jq
+  - openssh-server
+  - ripgrep
+  - tmux
+  - unzip
+  - build-essential
+  - python3
+  - python3-venv
+  - uidmap
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/50-powder-hardening.conf
+    permissions: '0600'
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      MaxAuthTries 3
+      ClientAliveInterval 300
+      ClientAliveCountMax 2
+  - path: /etc/sysctl.d/90-powder-dev.conf
+    permissions: '0644'
+    content: |
+      fs.inotify.max_user_watches=1048576
+      fs.inotify.max_user_instances=1024
+      vm.swappiness=10
+  - path: /etc/systemd/system/fstrim.timer.d/override.conf
+    permissions: '0644'
+    content: |
+      [Timer]
+      OnCalendar=weekly
+
+runcmd:
+  - install -d -o mez -g mez -m 0755 /workspaces
+  - fallocate -l 4G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - [ sh, -c, "grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab" ]
+  - systemctl restart ssh
+  - sysctl --system
+  - systemctl enable --now fstrim.timer
+
+final_message: "powder base provisioning complete; run cloud/powder/bootstrap.sh as mez"
