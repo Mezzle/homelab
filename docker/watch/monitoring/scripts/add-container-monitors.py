@@ -7,11 +7,11 @@ Several homelab containers are background workers with no HTTP port to probe
 Uptime Kuma PUSH monitors: a per-host heartbeat script (container-heartbeat.sh)
 checks each container's docker state/health and pings the monitor's push URL
 only while it is healthy. If a container dies or goes unhealthy, the ping stops
-and Kuma flips the monitor Down -> fires the Discord + Hermes-agent webhooks.
+and Kuma flips the monitor Down and fires the configured notifications.
 
 This script is idempotent: it creates each monitor only if a monitor of the
-same name does not already exist, attaches BOTH notifications (Discord=1,
-Hermes=2), places it under the right host group, and prints the push token for
+same name does not already exist, attaches the Discord notification, places it
+under the right host group, and prints the push token for
 each so the heartbeat config can be generated.
 
 Auth: reads UPK_USER/UPK_PASS (and optional UPK_TOTP_SECRET for a TOTP code)
@@ -53,13 +53,10 @@ CONTAINER_MONITORS: dict[str, list[str]] = {
     "charm": [
         "docktail (charm)",
     ],
-    "powder": [
-        "docktail (powder)",
-    ],
 }
 
 PUSH_INTERVAL = 120
-NOTIFICATION_IDS = [1, 2]  # 1 = Discord, 2 = Hermes Agent webhook
+NOTIFICATION_IDS = [1]  # Discord
 
 
 def log(msg: str) -> None:

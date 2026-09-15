@@ -105,9 +105,9 @@
         description: Internet speed monitoring
     - Uptime Kuma:
         icon: uptime-kuma.svg
-        href: https://uptime-kuma.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+        href: https://watch.{{HOMEPAGE_VAR_TAILNET}}.ts.net
         description: External monitoring
         widget:
           type: uptimekuma
-          url: https://uptime-kuma.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+          url: https://watch.{{HOMEPAGE_VAR_TAILNET}}.ts.net
           slug: homelab

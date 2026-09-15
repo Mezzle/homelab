@@ -238,9 +238,9 @@ op item get "powder/infra" --vault Homelab --fields label=TAILSCALE_OAUTH_CLIENT
 
 ---
 
-### `powder/monitoring` — External monitoring (Oracle Cloud)
+### `watch/monitoring` — External monitoring (Oracle Cloud)
 
-No stack-local secrets; Uptime Kuma is exposed via DockTail from `powder/infra`.
+No stack-local secrets. Tailscale Serve exposes Kuma from the `watch` host.
 
 ---
 
