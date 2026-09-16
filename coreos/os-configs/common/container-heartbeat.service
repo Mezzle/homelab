@@ -5,6 +5,6 @@ Wants=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/sbin/container-heartbeat.sh
+ExecStart=/srv/scripts/container-heartbeat.sh
 # Keep going even if one host's Kuma is briefly unreachable; the timer retries.
 TimeoutStartSec=60
