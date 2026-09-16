@@ -1,0 +1,4 @@
+name: homelab-cloudflare
+runtime: nodejs
+description: Cloudflare infrastructure for mez.run DNS and the setup site
+
