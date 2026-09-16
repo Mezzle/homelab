@@ -70,12 +70,14 @@ Used by `transpile.sh` to replace CHANGEME placeholders in `.bu` files.
 |---|---|---|
 | `SSH_PUBKEY` | `ssh-ed25519 AAAA...xyz mez@laptop` | `cat ~/.ssh/id_ed25519.pub` |
 | `TS_AUTHKEY` | `tskey-auth-kG4F9a...` | [Tailscale admin → Keys](https://login.tailscale.com/admin/settings/keys) |
+| `POWDER_TS_AUTHKEY` | `tskey-auth-kG4F9a...` | One-off, pre-authorized, non-ephemeral `tag:dev` key for Powder cloud-init. Replace it for each rebuild. |
 | `HDD_DISK_ID` | `ata-WDC_WD10JPVX_22JC3T0_WX81E64XXXXX` | `ls -l /dev/disk/by-id/ \| grep -v part` on pancake |
 
 ```bash
 # Verify
 op read "op://Homelab/coreos/SSH_PUBKEY"
 op read "op://Homelab/coreos/TS_AUTHKEY"
+op read "op://Homelab/coreos/POWDER_TS_AUTHKEY"
 op read "op://Homelab/coreos/HDD_DISK_ID"
 ```
 

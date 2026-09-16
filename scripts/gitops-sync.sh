@@ -241,6 +241,7 @@ if [[ -f "$MANIFEST" ]] && echo "$CHANGED_FILES" | grep -q "^coreos/os-configs/"
   [[ -n "${RELOAD_ACTIONS[sysctl]:-}" ]] && { log "Reloading sysctl..."; sudo sysctl --system --quiet && log "  sysctl OK" || log "  ERROR: sysctl reload failed"; }
   [[ -n "${RELOAD_ACTIONS[docker]:-}" ]] && { log "Reloading Docker..."; sudo systemctl reload docker && log "  docker OK" || log "  ERROR: docker reload failed"; }
   [[ -n "${RELOAD_ACTIONS[sshd]:-}" ]]   && { log "Reloading SSH..."; sudo systemctl reload sshd && log "  sshd OK" || log "  ERROR: sshd reload failed"; }
+  [[ -n "${RELOAD_ACTIONS[operator]:-}" ]] && { log "Installing homelab operator..."; sudo /usr/local/sbin/homelab-operator-install.sh && log "  operator OK" || log "  ERROR: operator install failed"; }
 fi
 
 log "Sync complete: $BEFORE → $AFTER"

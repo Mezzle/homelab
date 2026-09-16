@@ -1,120 +1,194 @@
-# Oracle reprovisioning runbook
+# Rebuild `powder` as a tailnet-only development machine
 
-This runbook moves Uptime Kuma from `powder` to an E2.1.Micro instance named
-`watch`, then rebuilds the Ampere A1 instance as an Ubuntu development host.
+`powder` is an Ubuntu 24.04 ARM64 development workstation on Oracle's A1
+shape. It is deliberately disposable: configuration lives in this repository
+and `Mezzle/dotfiles`; work that matters must be pushed.
 
-Do not terminate `powder` until the monitoring cutover passes the checks below.
-The final copy stops Kuma, so monitor history cannot split across two databases.
+The existing `watch` instance is already the monitoring host. Its default 50 GB
+boot volume counts against OCI's 200 GB Always Free block-volume allowance, so
+request about 150 GB for `powder` only after checking that the tenancy has no
+other retained boot or block volumes.
 
-## 1. Create watch
+## Before destroying the old instance
 
-Create an Oracle `VM.Standard.E2.1.Micro` instance with Ubuntu Server 24.04,
-a 50 GB boot volume, and a public IP for initial setup. The OCI security list
-only needs temporary TCP 22 ingress from your current public IP. Do not expose
-port 3001.
+1. Confirm Uptime Kuma is healthy on `watch` and has its expected monitors and
+   notification links.
+2. Push and merge the configuration in this repository, including the
+   `homelab-operator` deployment.
+3. On `pancake` and `charm`, let GitOps pull the change, then verify as `mez`:
 
-Render the cloud-init file on your Mac:
+   ```sh
+   sudo /usr/local/sbin/homelab-operator-install.sh
+   id homelab-operator
+   sudo -u homelab-operator sudo /usr/local/sbin/homelab-operator summary
+   ```
 
-```bash
-./cloud/render-cloud-init.sh watch
+4. Confirm there is no data on old `powder` worth retaining. Terminating it is
+   intentional and irreversible.
+
+## Tailscale policy
+
+Create `tag:dev` and `tag:homelab` in the Tailscale admin console, then tag
+`pancake` and `charm` with `tag:homelab`. The one-off cloud-init auth key must
+be pre-authorized, non-ephemeral, expire soon, and carry `tag:dev`.
+
+Replace `YOUR_TAILSCALE_LOGIN` with the exact login shown in the Tailscale admin
+console, then merge the following rules into the tailnet policy. Keep existing
+rules that other machines need; this is a focused addition, not a replacement
+policy.
+
+```jsonc
+{
+  "tagOwners": {
+    "tag:dev": ["autogroup:admin"],
+    "tag:homelab": ["autogroup:admin"]
+  },
+  "acls": [
+    // Existing ACLs remain here.
+    {
+      "action": "accept",
+      "src": ["YOUR_TAILSCALE_LOGIN"],
+      "dst": ["tag:dev:443"]
+    }
+  ],
+  "ssh": [
+    // Your ordinary tailnet identity reaches the Powder workstation.
+    {
+      "action": "check",
+      "src": ["YOUR_TAILSCALE_LOGIN"],
+      "dst": ["tag:dev"],
+      "users": ["mez"],
+      "checkPeriod": "12h"
+    },
+    // Agents on Powder can only become the restricted home-lab operator.
+    {
+      "action": "accept",
+      "src": ["tag:dev"],
+      "dst": ["tag:homelab"],
+      "users": ["homelab-operator"]
+    }
+  ]
+}
 ```
 
-Paste `cloud/watch/cloud-init.rendered.yaml` into the instance cloud-init field.
-It contains a Tailscale auth key, so delete the local rendered file and revoke a
-single-use key after `watch` appears in the tailnet.
-Wait for `/var/lib/cloud/instance/boot-finished`, then connect:
+Manual verification after the policy saves:
 
-```bash
-ssh mez@watch
-git clone git@github.com:mezzle/homelab.git ~/homelab
-cd ~/homelab
-./cloud/watch/bootstrap.sh
+```sh
+ssh mez@powder true
+curl --fail https://powder.<tailnet>.ts.net/
+ssh homelab-operator@pancake 'sudo /usr/local/sbin/homelab-operator summary'
+ssh homelab-operator@charm 'sudo /usr/local/sbin/homelab-operator summary'
+ssh core@pancake true # this must fail from powder
 ```
 
-Cloud-init joins Tailscale and enables Tailscale SSH. The bootstrap clones the
-repository to `/srv`, starts Kuma, enables the five-minute GitOps timer, and publishes Kuma at
-`https://watch.<tailnet>.ts.net` with Tailscale Serve.
+`homelab-operator restart`, `gitops`, and `reboot` are intentionally permitted
+by the wrapper. Agents must ask before using them. Scheduled diagnostics use
+only `summary`, `logs`, `status`, `containers`, and `gitops-status`.
 
-Remove public SSH ingress after `ssh mez@watch` works through Tailscale.
+## Create Powder
 
-## 2. Cut over Uptime Kuma
+1. In 1Password, add `POWDER_TS_AUTHKEY` to the `Homelab/coreos` item. Put the
+   short-lived one-off tagged key there. It is consumed once during cloud-init.
+2. Render the user-data locally. The rendered file contains secrets and is
+   ignored by Git:
 
-The migration script stops the old container before its final archive. It leaves
-the source data intact, so rollback is `docker start uptime-kuma` on old powder.
+   ```sh
+   ./cloud/render-cloud-init.sh powder
+   ```
 
-```bash
-./scripts/migrate-uptime-kuma.sh
-./scripts/migrate-uptime-kuma.sh --confirm
+3. Create an Oracle Ubuntu Server 24.04 ARM64 A1 VM with 2 OCPUs, 12 GB RAM,
+   and the remaining Always Free boot storage. Paste the rendered file as
+   cloud-init user data. Do not create an OCI ingress rule, including SSH.
+4. Wait for cloud-init to finish. If the tailnet key or firewall setup fails,
+   use the OCI serial console rather than opening public SSH.
+5. Once it appears as `powder` in Tailscale, connect from your laptop:
+
+   ```sh
+   ssh mez@powder
+   ```
+
+6. Authenticate GitHub, clone this repository, and run the user bootstrap:
+
+   ```sh
+   gh auth login
+   gh auth setup-git
+   git clone https://github.com/Mezzle/homelab.git ~/dev/homelab
+   cd ~/dev/homelab
+   ./cloud/powder/bootstrap.sh
+   ```
+
+   The bootstrap requests Powder's read-only 1Password service-account token
+   without echoing it. It stores the token at
+   `~/.config/1password/service-account.env` with mode `0600`, then applies
+   `Mezzle/dotfiles`. Select `devMachine = true` when chezmoi prompts.
+
+7. Log out and in again. Docker membership and the zsh login shell apply on
+   the next session.
+
+## Signing and agent setup
+
+Load the service-account environment before restoring a signing key:
+
+```sh
+set -a
+. ~/.config/1password/service-account.env
+set +a
+~/dev/homelab/cloud/powder/setup-signing-key.sh
 ```
 
-Then verify:
+The service account is normally read-only. Create the `powder-signing-key` SSH
+Key item in 1Password from a trusted laptop before a rebuild, or temporarily
+grant create access to store a newly generated key. Register the generated
+public key in GitHub as a signing key if `gh` did not do it automatically.
 
-```bash
-curl -fsS https://watch.<tailnet>.ts.net/ >/dev/null
-ssh mez@watch 'docker ps && systemctl status monitoring-stack gitops-sync.timer'
+Authenticate providers separately. Do not point Codex or Claude at z.ai by
+default:
+
+```sh
+codex login                 # ChatGPT subscription
+claude auth login           # Claude subscription
+opencode auth login         # select Z.AI Coding Plan
 ```
 
-In Kuma, check monitor history, notification settings, and push monitors. Stop a
-non-critical test service and wait for its alert before proceeding.
+Install and pair the persistent T3 service over Tailscale HTTPS:
 
-The heartbeat sender now defaults to `https://watch.corgi-justice.ts.net`.
-Override `TAILNET` if the tailnet DNS suffix changes. Reinstall the tracked
-script and service on `pancake` and `charm`:
-
-```bash
-sudo install -m 0755 scripts/container-heartbeat.sh /usr/local/sbin/container-heartbeat.sh
-sudo install -m 0644 coreos/os-configs/common/container-heartbeat.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl restart container-heartbeat.timer
+```sh
+npx t3@latest service install
+npx t3@latest service status
+npx t3 pair --tailscale
 ```
 
-## 3. Rebuild powder
+Add `mez@powder` as a T3 Code SSH environment. Use the same target with
+JetBrains Gateway / IntelliJ Remote Development; open projects under `~/dev`.
+Start with a 3 GB IDE backend heap because the host has only two cores.
 
-Back up any files under `/workspaces` or the old `/srv` that are not in Git.
-Terminate the old A1 instance only after the monitoring checks pass.
+## Operations
 
-Create `powder` as an Ubuntu Server 24.04 ARM64 A1 instance with 2 OCPUs,
-12 GB RAM, and the remaining Always Free boot-volume allocation. Use this
-rendered cloud-init:
+Run the explicit update command when you are ready to disrupt active tools:
 
-```bash
-./cloud/render-cloud-init.sh powder
+```sh
+~/dev/homelab/scripts/powder-update.sh
 ```
 
-After cloud-init finishes:
+It updates Ubuntu packages, chezmoi, Mise-managed developer tools, and the T3
+background service. It reports a reboot requirement but does not reboot.
 
-```bash
-ssh mez@<powder-public-ip>
-git clone git@github.com:mezzle/homelab.git ~/homelab
-cd ~/homelab
-./cloud/powder/bootstrap.sh
-```
+`watch` should monitor Powder's T3 HTTPS endpoint, Tailscale/SSH reachability,
+disk space, failed units, and pending reboot state. Local systemd and Docker
+restart policies handle automatic recovery. `watch` alerts; it does not repair
+Powder.
 
-Sign out once after bootstrap so the new Docker group applies. Confirm access
-over Tailscale, then remove public SSH ingress.
+## Acceptance checklist
 
-## 4. Connect development clients
-
-For T3 Code, add an SSH remote environment for `mez@powder`. Its launcher finds
-Node through the mise shims configured in `~/.profile` and starts T3 on a remote
-loopback port.
-
-For IntelliJ IDEA, choose Remote Development, add the same SSH target, and put
-projects under `/workspaces`. Start with a 3 GB backend heap. Powder has enough
-RAM, but only two cores, so indexing several large projects at once will hurt.
-
-Run `codex login` and `claude` in an SSH terminal on powder. Their credentials
-remain in the development user's home directory. Do not copy laptop credential
-directories wholesale.
-
-## Rollback
-
-If the restored Kuma instance is unhealthy:
-
-```bash
-ssh mez@watch 'sudo systemctl stop monitoring-stack.service'
-ssh mez@powder 'docker start uptime-kuma'
-```
-
-No migration step deletes the old Kuma data. Oracle instance termination is the
-first irreversible step in this runbook.
+- Reboot and reconnect through Tailscale with no OCI ingress.
+- Pair T3 over tailnet HTTPS and open a persistent session.
+- Use Codex, Claude Code, and OpenCode with their separate subscriptions.
+- Clone a repository under `~/dev` and open it through IntelliJ Remote
+  Development.
+- Verify `node` and `pnpm` in zsh, non-interactive SSH, IntelliJ, and T3.
+- Make a signed test commit and confirm GitHub marks it verified.
+- Run `homelab-operator summary` on Pancake and Charm from Powder.
+- Restart an approved service only after an explicit confirmation.
+- Confirm `core` login from Powder is denied.
+- Confirm Watch sees Powder's health checks and an OCI reboot restores
+  Tailscale, Docker, and T3 without manual repair.

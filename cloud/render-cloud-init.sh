@@ -22,7 +22,12 @@ if [[ "$SSH_PUBKEY" != ssh-* ]]; then
   exit 1
 fi
 
-TS_AUTHKEY="$(op read 'op://Homelab/coreos/TS_AUTHKEY')"
+AUTH_KEY_FIELD="TS_AUTHKEY"
+if [[ "$HOST" == "powder" ]]; then
+  AUTH_KEY_FIELD="POWDER_TS_AUTHKEY"
+fi
+
+TS_AUTHKEY="$(op read "op://Homelab/coreos/$AUTH_KEY_FIELD")"
 if [[ "$TS_AUTHKEY" != tskey-* ]]; then
   echo "The TS_AUTHKEY value does not look like a Tailscale auth key" >&2
   exit 1
@@ -35,5 +40,5 @@ SSH_PUBKEY="$SSH_PUBKEY" TS_AUTHKEY="$TS_AUTHKEY" perl -0pe '
   "$SOURCE" > "$OUTPUT"
 chmod 600 "$OUTPUT"
 echo "Wrote $OUTPUT"
-echo "The rendered file contains your SSH public key and Tailscale auth key."
+echo "The rendered file contains your SSH public key and one-off Tailscale auth key."
 echo "It is mode 600 and ignored by Git. Delete it after the instance joins the tailnet."

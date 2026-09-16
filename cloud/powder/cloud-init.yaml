@@ -29,9 +29,12 @@ packages:
   - tmux
   - unzip
   - build-essential
+  - unattended-upgrades
+  - ufw
   - python3
   - python3-venv
   - uidmap
+  - zsh
 
 write_files:
   - path: /etc/ssh/sshd_config.d/50-powder-hardening.conf
@@ -54,16 +57,41 @@ write_files:
     content: |
       [Timer]
       OnCalendar=weekly
+  - path: /etc/apt/apt.conf.d/52powder-unattended-upgrades
+    permissions: '0644'
+    content: |
+      Unattended-Upgrade::Automatic-Reboot "false";
+      Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
+  - path: /run/tailscale-authkey
+    owner: root:root
+    permissions: '0600'
+    content: |
+      tskey-auth-CHANGEME
+  - path: /usr/local/sbin/configure-powder-firewall
+    permissions: '0755'
+    content: |
+      #!/bin/sh
+      set -eu
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow in on tailscale0
+      ufw --force enable
 
 runcmd:
-  - install -d -o mez -g mez -m 0755 /workspaces
-  - fallocate -l 4G /swapfile
+  - install -d -o mez -g mez -m 0755 /home/mez/dev
+  - [ sh, -c, "test -f /swapfile || fallocate -l 4G /swapfile" ]
   - chmod 600 /swapfile
   - mkswap /swapfile
   - swapon /swapfile
   - [ sh, -c, "grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab" ]
+  - [ sh, -c, "curl -fsSL https://tailscale.com/install.sh | sh" ]
+  - [ sh, -c, "tailscale up --auth-key=$(tr -d '\\n' </run/tailscale-authkey) --hostname=powder --ssh --accept-dns=true" ]
+  - rm -f /run/tailscale-authkey
+  - /usr/local/sbin/configure-powder-firewall
+  - loginctl enable-linger mez
   - systemctl restart ssh
   - sysctl --system
   - systemctl enable --now fstrim.timer
 
-final_message: "powder base provisioning complete; run cloud/powder/bootstrap.sh as mez"
+final_message: "powder joined Tailscale with public ingress closed; connect as mez and run cloud/powder/bootstrap.sh"
