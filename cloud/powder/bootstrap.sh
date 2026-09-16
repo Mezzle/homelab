@@ -39,11 +39,15 @@ install_docker() {
 }
 
 install_chezmoi() {
+  local chezmoi_bin
   if ! command -v chezmoi >/dev/null 2>&1; then
     sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin"
+    chezmoi_bin="$HOME/.local/bin/chezmoi"
+  else
+    chezmoi_bin="$(command -v chezmoi)"
   fi
   log "Applying Mezzle/dotfiles. Select this as a development machine when prompted."
-  chezmoi init --apply Mezzle
+  "$chezmoi_bin" init --apply Mezzle
 }
 
 store_service_account_token() {
