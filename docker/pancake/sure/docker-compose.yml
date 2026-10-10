@@ -180,6 +180,14 @@ services:
       - /var/mnt/nas/backup:/nas:rslave
     entrypoint: /bin/bash
     command: ["-c", "while true; do /bin/bash /backup.sh || true; sleep 86400; done"]
+    # Unhealthy when the newest dump is over 26h old, which container-heartbeat
+    # reports to Uptime Kuma as down.
+    healthcheck:
+      test: ["CMD-SHELL", "find /nas/backups/sure -name 'sure-*.sql.gz' -mmin -1560 | grep -q ."]
+      interval: 5m
+      timeout: 30s
+      retries: 2
+      start_period: 2m
     depends_on:
       db:
         condition: service_healthy

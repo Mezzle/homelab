@@ -463,7 +463,11 @@ services:
       BACKUP_VERIFY_CRON: "0 12 1 * *"
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
     volumes:
-      - ./appdata:/appdata:ro,z
+      # No :z here. Relabelling walks into appdata/seedbox (rclone FUSE), so a
+      # disconnected seedbox made this container unstartable and backups
+      # stopped for two weeks (2026-09-26). Each app's own :z mount already
+      # labels its appdata subdirectory.
+      - ./appdata:/appdata:ro
       - ./scripts/backup.sh:/backup.sh:ro,z
       - /var/mnt/nas/backup:/nas:rslave
     entrypoint: /bin/sh

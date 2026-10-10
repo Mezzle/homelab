@@ -47,6 +47,7 @@ CONTAINER_MONITORS: dict[str, list[str]] = {
         "rclone-seedbox",
         "backup",
         "speedtest",
+        "sure-backup",
         "portainer",
         "docktail (pancake)",
     ],

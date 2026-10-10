@@ -125,6 +125,12 @@ GROUPS: dict[str, list[dict]] = {
         ),
         dict(
             type=MonitorType.HTTP,
+            name="Sure",
+            url=f"https://sure.{TS}/up",
+            interval=60,
+        ),
+        dict(
+            type=MonitorType.HTTP,
             name="Music Assistant",
             url=f"https://music.{TS}",
             interval=60,

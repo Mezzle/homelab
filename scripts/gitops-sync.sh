@@ -129,7 +129,21 @@ if [[ "$LOCAL" == "$REMOTE" ]]; then
 fi
 
 log "Changes detected: $LOCAL → $REMOTE"
-git pull --quiet --ff-only origin
+
+# A dirty tree or host-local commit makes the fast-forward fail. Without this
+# check set -e killed the script here, before any notify call, and the host
+# stopped deploying silently. Notify once per target commit, not every run.
+PULL_FAILED_MARKER="/tmp/gitops-sync.pull-failed"
+if ! PULL_OUTPUT=$(git pull --quiet --ff-only origin 2>&1); then
+  log "ERROR: git pull failed — $REPO_DIR needs manual reconciliation:"
+  echo "$PULL_OUTPUT" | sed 's/^/  /'
+  if [[ "$(cat "$PULL_FAILED_MARKER" 2>/dev/null)" != "$REMOTE" ]]; then
+    notify critical "GitOps sync blocked" "git pull failed, so nothing is deploying to this host. Check: journalctl -u gitops-sync.service"
+    echo "$REMOTE" > "$PULL_FAILED_MARKER"
+  fi
+  exit 1
+fi
+rm -f "$PULL_FAILED_MARKER"
 
 AFTER=$(git rev-parse HEAD)
 CHANGED_FILES=$(git diff --name-only "$BEFORE" "$AFTER")
