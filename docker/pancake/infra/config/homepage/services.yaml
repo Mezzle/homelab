@@ -69,6 +69,11 @@
 #        href: https://z2m.{{HOMEPAGE_VAR_TAILNET}}.ts.net
 #        description: Zigbee bridge
 
+    - Sure:
+        icon: mdi-finance
+        href: https://sure.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+        description: Personal finance
+
 - Infrastructure:
     - Portainer (Pancake):
         icon: portainer.svg

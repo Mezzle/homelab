@@ -1,0 +1,186 @@
+##############################################################################
+# Sure — self-hosted personal finance (https://sure.am)
+#
+# Rails web app + Sidekiq worker, backed by Postgres and Redis.
+# Trimmed from https://github.com/we-promise/sure/blob/main/compose.example.yml
+#
+# Data lives in named volumes (sure_postgres-data, sure_app-storage), not
+# ./appdata. The backup container dumps Postgres to the NAS daily.
+#
+# Required:
+#   - Copy .env.example to .env and fill in your values
+##############################################################################
+
+x-db-env: &db-env
+  POSTGRES_USER: sure_user
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  POSTGRES_DB: sure_production
+
+x-rails-env: &rails-env
+  <<: *db-env
+  TZ: Europe/London
+  SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+  SELF_HOSTED: "true"
+  RAILS_FORCE_SSL: "false"
+  # DockTail terminates HTTPS in front of the app.
+  RAILS_ASSUME_SSL: "true"
+  DB_HOST: db
+  DB_PORT: 5432
+  REDIS_URL: redis://redis:6379/1
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-security-opts: &security-opts
+  security_opt:
+    - no-new-privileges:true
+
+networks:
+  sure:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-sure
+
+volumes:
+  app-storage:
+  postgres-data:
+  redis-data:
+
+services:
+  ##########################################################################
+  # Sure — web
+  ##########################################################################
+  web:
+    image: ghcr.io/we-promise/sure:stable
+    container_name: sure
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - sure
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=sure"
+      - "docktail.service.port=3000"
+      - "docktail.service.service-port=443"
+      - "docktail.service.network=sure_sure"
+    environment:
+      <<: *rails-env
+    volumes:
+      - app-storage:/rails/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging: *default-logging
+
+  ##########################################################################
+  # Sure — Sidekiq worker (syncs, imports, scheduled jobs)
+  ##########################################################################
+  worker:
+    image: ghcr.io/we-promise/sure:stable
+    container_name: sure-worker
+    command: bundle exec sidekiq
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - sure
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    environment:
+      <<: *rails-env
+    volumes:
+      - app-storage:/rails/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging: *default-logging
+
+  ##########################################################################
+  # Postgres
+  ##########################################################################
+  db:
+    image: postgres:16
+    container_name: sure-db
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - sure
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    environment:
+      <<: *db-env
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  ##########################################################################
+  # Redis
+  ##########################################################################
+  redis:
+    image: redis:7-alpine
+    container_name: sure-redis
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - sure
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  ##########################################################################
+  # Backup — pg_dump to the NAS on start and then every 24h
+  #
+  # Manual run: ./stack.sh backup
+  ##########################################################################
+  backup:
+    image: postgres:16
+    container_name: sure-backup
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - sure
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    environment:
+      <<: *db-env
+      TZ: Europe/London
+      BACKUP_RETENTION_DAYS: 14
+    volumes:
+      - ./scripts/backup.sh:/backup.sh:ro,z
+      - /var/mnt/nas/backup:/nas:rslave
+    entrypoint: /bin/bash
+    command: ["-c", "while true; do /bin/bash /backup.sh || true; sleep 86400; done"]
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *default-logging

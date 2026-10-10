@@ -175,6 +175,20 @@ op item get "pancake/speedtest" --vault Homelab --fields label=APP_KEY
 
 ---
 
+### `pancake/sure` — Sure personal finance
+
+| Field | Example value | Notes |
+|---|---|---|
+| `SECRET_KEY_BASE` | `a7523c3d...` | Generate: `openssl rand -hex 64` |
+| `POSTGRES_PASSWORD` | `password` | Generate: `openssl rand -hex 24`. Fixed once the database volume is initialised. |
+
+```bash
+# Verify
+op item get "pancake/sure" --vault Homelab --fields label=SECRET_KEY_BASE,label=POSTGRES_PASSWORD
+```
+
+---
+
 ### `charm/infra` — Portainer agent + DockTail
 
 | Field | Example value | Notes |
@@ -286,6 +300,7 @@ check "pancake/immich" IMMICH_VERSION NAS_HOST NAS_PHOTOS_SHARE NAS_PHOTOS_USER 
   IMMICH_TRANSCODING_BACKEND IMMICH_ML_BACKEND IMMICH_ML_IMAGE_SUFFIX
 
 check "pancake/speedtest" APP_KEY
+check "pancake/sure" SECRET_KEY_BASE POSTGRES_PASSWORD
 check "pancake/infra" TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET TAILNET \
   SONARR_API_KEY RADARR_API_KEY PROWLARR_API_KEY PLEX_TOKEN IMMICH_API_KEY ADGUARD_USER ADGUARD_PASS
 check "charm/infra" TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET
