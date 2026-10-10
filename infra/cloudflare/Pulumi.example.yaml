@@ -1,0 +1,6 @@
+config:
+  homelab-cloudflare:accountId: replace-with-account-id
+  homelab-cloudflare:zoneId: replace-with-zone-id
+  homelab-cloudflare:zoneName: mez.run
+  homelab-cloudflare:enablePublicDns: "false"
+  homelab-cloudflare:enableStartSite: "true"

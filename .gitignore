@@ -1,5 +1,10 @@
 # Secrets
 **/.env
+**/node_modules/
+
+# Pulumi local state and generated artifacts
+infra/**/.pulumi/
+infra/**/dist/
 
 # Application data
 **/appdata/
