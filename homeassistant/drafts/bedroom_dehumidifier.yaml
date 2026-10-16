@@ -4,6 +4,8 @@
 #   * new "reconcile" check every 15 min: boolean on but plug steadily <3 W for 10+ min -> re-run the ON sequence
 #   * on repeated failure the boolean is turned off, so the humidity automations can re-arm it later
 #   * mode: restart so a reconcile doesn't get dropped while a sequence is mid-delay
+#   * verification uses wait_template on the Tapo power reading (it lags ~15 s), not fixed delays
+#   * ON failure cuts the plug before flipping the boolean off, so the OFF branch can't orphan a running unit
 alias: Bedroom Dehumidifier Controller
 description: Drives a dehumidifier via a SwitchBot press, verified by plug power. Self-heals if it is told to be on but isn't drawing power.
 mode: restart
@@ -58,23 +60,32 @@ actions:
             target: { entity_id: "{{ off_timer }}" }
           - action: switch.turn_on
             target: { entity_id: "{{ plug }}" }
-          - delay: { seconds: 7 }
+          - alias: "wait up to 30 s for the unit to auto-start"
+            wait_template: "{{ states(power_sensor) | float(0) > power_on_threshold }}"
+            timeout: "00:00:30"
+            continue_on_timeout: true
           - if:
               - condition: template
-                value_template: "{{ states(power_sensor) | float(0) > power_on_threshold }}"
+                value_template: "{{ wait.completed }}"
             then:
-              - stop: Device already running
+              - stop: Device auto-started
           - action: switch.turn_on
             target: { entity_id: "{{ button }}" }
-          - delay: { seconds: 7 }
+          - alias: "wait up to 60 s for the Tapo power reading to confirm it is running"
+            wait_template: "{{ states(power_sensor) | float(0) > power_on_threshold }}"
+            timeout: "00:01:00"
+            continue_on_timeout: true
           - if:
               - condition: template
-                value_template: "{{ states(power_sensor) | float(0) < power_on_threshold }}"
+                value_template: "{{ not wait.completed }}"
             then:
               - action: notify.mobile_app_iphone
                 data:
                   title: "Failure: {{ device_name }}"
-                  message: "Failed to turn ON the {{ device_name }} ({{ trigger.id }}). Power: {{ states(power_sensor) }}W, needs >{{ power_on_threshold }}W"
+                  message: "Failed to turn ON the {{ device_name }} ({{ trigger.id }}). Power: {{ states(power_sensor) }}W after 60 s, needs >{{ power_on_threshold }}W. Plug cut, control set to off."
+              # cut the plug FIRST so the off-branch that follows sees a dead unit and cannot orphan a running one
+              - action: switch.turn_off
+                target: { entity_id: "{{ plug }}" }
               - action: input_boolean.turn_off
                 target: { entity_id: "{{ control_entity }}" }
       - conditions:
@@ -88,7 +99,10 @@ actions:
             then:
               - action: switch.turn_on
                 target: { entity_id: "{{ button }}" }
-              - delay: { seconds: 20 }
+              - alias: "wait up to 45 s for power to drop"
+                wait_template: "{{ states(power_sensor) | float(0) < power_off_threshold }}"
+                timeout: "00:00:45"
+                continue_on_timeout: true
           - if:
               - condition: template
                 value_template: "{{ states(power_sensor) | float(0) < power_off_threshold }}"
