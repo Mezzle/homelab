@@ -153,9 +153,9 @@ opencode auth login         # select Z.AI Coding Plan
 Install and pair the persistent T3 service over Tailscale HTTPS:
 
 ```sh
-npx t3@latest service install
-npx t3@latest service status
-npx t3 pair --tailscale
+t3 service install
+t3 service status
+t3 pair --tailscale
 ```
 
 Add `mez@powder` as a T3 Code SSH environment. Use the same target with

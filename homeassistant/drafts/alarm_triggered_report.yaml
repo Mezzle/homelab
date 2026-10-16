@@ -1,0 +1,167 @@
+# DRAFT — two new automations. Ring alarm has no "which sensor tripped" attribute, so this
+# reconstructs it from sensors that changed in the 90 s before the trigger.
+#
+# 1) On trigger: send an actionable notification with the evidence + a snapshot of the
+#    exterior camera nearest the kitchen. Then 3 min later, a timeline follow-up.
+# 2) Handle the button presses: "Cats" = disarm now, re-arm away after 2 min.
+#    "Real" = siren stays on, all lights on, repeat critical alert every minute until disarmed.
+#
+# Only Martin's iPhone has the companion app. Add notify.mobile_app_<letisha> to the
+# notify targets once it's installed.
+
+- alias: Alarm triggered - evidence report
+  id: alarm_triggered_report
+  description: When the Ring alarm trips, say what tripped it and ask whether it's real.
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: alarm_control_panel.lindsworth_alarm
+      to: triggered
+  variables:
+    tripped_at: "{{ now() }}"
+    report: >-
+      {% set ns = namespace(inside=[], doors=[], outside=[]) %}
+      {% set cutoff = now() - timedelta(seconds=90) %}
+      {% for s in states.binary_sensor
+           if s.entity_id.endswith('_alarm_motion_sensor')
+           or s.entity_id == 'binary_sensor.hall_keypad_motion'
+           or s.entity_id == 'binary_sensor.everything_presence_one_3e3e6c_occupancy' %}
+        {% if s.state == 'on' and s.last_changed > cutoff %}
+          {% set ns.inside = ns.inside + [area_name(s.entity_id) ~ ' ' ~ s.last_changed.astimezone().strftime('%H:%M:%S')] %}
+        {% endif %}
+      {% endfor %}
+      {% for s in states.binary_sensor if s.entity_id.endswith('_contact_sensor') or s.entity_id.endswith('_window') %}
+        {% if s.state == 'on' or s.last_changed > cutoff %}
+          {% set ns.doors = ns.doors + [s.name ~ ': ' ~ ('OPEN' if s.state == 'on' else 'closed ' ~ s.last_changed.astimezone().strftime('%H:%M:%S'))] %}
+        {% endif %}
+      {% endfor %}
+      {% for s in expand('binary_sensor.front_door_motion', 'binary_sensor.back_garden_motion', 'binary_sensor.gate_motion', 'binary_sensor.bins_motion') %}
+        {% if s.last_changed > now() - timedelta(minutes=5) %}
+          {% set ns.outside = ns.outside + [s.name ~ ' ' ~ s.last_changed.astimezone().strftime('%H:%M')] %}
+        {% endif %}
+      {% endfor %}
+      Inside: {{ ns.inside | join(', ') if ns.inside else 'no interior sensor in last 90 s' }}
+      Doors/windows: {{ ns.doors | join(', ') if ns.doors else 'all closed, none changed' }}
+      Outside cams (5 min): {{ ns.outside | join(', ') if ns.outside else 'no motion' }}
+      Cats home: {{ 'yes' if is_state('binary_sensor.holly', 'on') or is_state('binary_sensor.shadow', 'on') else 'NO' }}
+      People home: {{ 'yes' if is_state('binary_sensor.anyone_home', 'on') else 'no' }}
+    looks_like_cats: >-
+      {{ 'Kitchen' in report and 'OPEN' not in report and 'no motion' in report and 'Cats home: yes' in report }}
+  actions:
+    - action: notify.mobile_app_iphone
+      data:
+        title: >-
+          🚨 Alarm triggered{{ ' — probably the cats' if looks_like_cats else '' }}
+        message: "{{ report }}"
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1.0
+          tag: alarm-trip
+          group: alarm
+          image: /api/camera_proxy/camera.back_garden_live_view
+          actions:
+            - action: ALARM_CATS
+              title: "Cats — disarm & re-arm"
+              destructive: false
+            - action: ALARM_REAL
+              title: "NOT a false positive"
+              destructive: true
+            - action: URI
+              title: "Open cameras"
+              uri: /lovelace/cameras
+    - delay: "00:03:00"
+    - condition: state
+      entity_id: alarm_control_panel.lindsworth_alarm
+      state: triggered
+    - variables:
+        timeline: >-
+          {% set ns = namespace(l=[]) %}
+          {% for s in states.binary_sensor
+               if (s.entity_id.endswith('_alarm_motion_sensor') or s.entity_id.endswith('_contact_sensor') or s.entity_id == 'binary_sensor.hall_keypad_motion')
+               and s.last_changed > as_datetime(tripped_at) - timedelta(seconds=90) %}
+            {% set ns.l = ns.l + [s.last_changed.astimezone().strftime('%H:%M:%S') ~ ' ' ~ s.name ~ ' ' ~ s.state] %}
+          {% endfor %}
+          {{ ns.l | sort | join('\n') if ns.l else 'No further alarm sensors changed since the trip.' }}
+    - action: notify.mobile_app_iphone
+      data:
+        title: "Alarm still triggered — 3 min timeline"
+        message: "{{ timeline }}"
+        data:
+          tag: alarm-timeline
+          group: alarm
+          actions:
+            - action: ALARM_CATS
+              title: "Cats — disarm & re-arm"
+            - action: ALARM_REAL
+              title: "NOT a false positive"
+              destructive: true
+
+- alias: Alarm triggered - handle response
+  id: alarm_triggered_response
+  mode: restart
+  triggers:
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: ALARM_CATS
+      id: cats
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: ALARM_REAL
+      id: real
+  actions:
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: cats
+          sequence:
+            - action: alarm_control_panel.alarm_disarm
+              target:
+                entity_id: alarm_control_panel.lindsworth_alarm
+            - action: notify.mobile_app_iphone
+              data:
+                message: "Disarmed. Re-arming away in 2 minutes."
+                data: { tag: alarm-trip, group: alarm }
+            - delay: "00:02:00"
+            - condition: state
+              entity_id: binary_sensor.anyone_home
+              state: "off"
+            - action: alarm_control_panel.alarm_arm_away
+              target:
+                entity_id: alarm_control_panel.lindsworth_alarm
+        - conditions:
+            - condition: trigger
+              id: real
+          sequence:
+            - action: switch.turn_on
+              target:
+                entity_id: switch.lindsworth_siren
+            - action: light.turn_on
+              target:
+                floor_id: [ground_floor, first_floor]
+              data:
+                brightness_pct: 100
+            - repeat:
+                while:
+                  - condition: state
+                    entity_id: alarm_control_panel.lindsworth_alarm
+                    state: triggered
+                sequence:
+                  - action: notify.mobile_app_iphone
+                    data:
+                      title: "🚨 INTRUDER — alarm still triggered"
+                      message: >-
+                        {{ states.binary_sensor
+                           | selectattr('entity_id', 'search', '_alarm_motion_sensor|_contact_sensor')
+                           | selectattr('state', 'eq', 'on')
+                           | map(attribute='name') | join(', ') or 'no sensor currently active' }}
+                      data:
+                        push: { sound: { name: default, critical: 1, volume: 1.0 } }
+                        tag: alarm-real
+                        group: alarm
+                        image: /api/camera_proxy/camera.front_door_live_view
+                  - delay: "00:01:00"

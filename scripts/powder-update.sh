@@ -12,8 +12,8 @@ chezmoi update
 mise upgrade
 
 log "Updating the T3 background service"
-npx t3@latest service update
-npx t3@latest service status
+t3 update
+t3 service status
 
 if [[ -f /var/run/reboot-required ]]; then
   log "A reboot is required. It has not been performed."

@@ -1,0 +1,26 @@
+# DRAFT — new automation, replaces the orphaned "Everyone is away for 30 minutes"
+alias: Arm away when everyone has left
+description: Arms the alarm (which triggers Shutdown Home) once both presence booleans have been off for 30 minutes and nobody armed it manually.
+mode: single
+triggers:
+  - trigger: state
+    entity_id:
+      - input_boolean.martin_home
+      - input_boolean.letisha_home
+    to: "off"
+    for: "00:30:00"
+conditions:
+  - condition: state
+    entity_id: input_boolean.martin_home
+    state: "off"
+  - condition: state
+    entity_id: input_boolean.letisha_home
+    state: "off"
+  - condition: state
+    entity_id: alarm_control_panel.lindsworth_alarm
+    state: disarmed
+  # person.holly / person.shadow are cats and deliberately ignored.
+actions:
+  - action: alarm_control_panel.alarm_arm_away
+    target:
+      entity_id: alarm_control_panel.lindsworth_alarm
