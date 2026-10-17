@@ -26,6 +26,7 @@ packages:
   - jq
   - openssh-server
   - ripgrep
+  - shellcheck
   - tmux
   - unzip
   - build-essential
