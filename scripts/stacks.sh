@@ -26,6 +26,7 @@ case "${1:-help}" in
   down-all)    each Stopping down ;;
   restart-all) each Restarting restart ;;
   update-all)  each Updating update ;;
+  clean)       docker system prune -f --volumes=false ;;
   status)      docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | sort ;;
   help|*)
     cat <<HELP
@@ -35,6 +36,9 @@ Usage: ./stacks.sh <command>
   down-all        Stop all stacks
   restart-all     Restart all stacks
   update-all      Pull and recreate all stacks
+  clean           Remove stopped containers, unused networks and dangling images
+                  now (never volumes). docker-prune.timer prunes week-old
+                  images every Sunday.
   status          Show all container status
   help            Show this help
 
