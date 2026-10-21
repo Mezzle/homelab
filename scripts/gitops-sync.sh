@@ -265,7 +265,13 @@ if [[ -f "$MANIFEST" ]] && echo "$CHANGED_FILES" | grep -q "^coreos/os-configs/"
 
     if [[ "$src" == */* ]]; then
       scope="${src%%/*}"
-      [[ "$scope" == "common" || "$scope" == "$HOSTNAME" ]] || continue
+      # common/ is Fedora CoreOS only. The Ubuntu hosts have their own
+      # gitops-sync unit (systemd/<host>/) and no wheel group.
+      if [[ "$scope" == "common" ]]; then
+        [[ -e /run/ostree-booted ]] || continue
+      elif [[ "$scope" != "$HOSTNAME" ]]; then
+        continue
+      fi
     fi
 
     if ! echo "$CHANGED_FILES" | grep -qx "coreos/os-configs/$src"; then

@@ -17,7 +17,7 @@
 # After that, push to git — gitops-sync pulls every 5 minutes.
 #
 # uCore image: ghcr.io/ublue-os/ucore:stable (ARM)
-#   Docker + compose, Tailscale, Cockpit.
+#   Docker + compose, Tailscale.
 #
 # /boot on powder (350M) has no room for a second aarch64 deployment, so
 # rpm-ostree layering and OS upgrades fail. Containerise instead.
@@ -90,10 +90,10 @@ storage:
     # Files shared with gitops-sync (coreos/os-configs/manifest.conf).
     # Same source on first boot and on every later change.
     ##################################################################
-    - path: /etc/sysctl.d/90-arr-tuning.conf
+    - path: /etc/sysctl.d/90-base.conf
       mode: 0644
       contents:
-        local: os-configs/sysctl-90-arr-tuning.conf
+        local: os-configs/sysctl-90-base.conf
 
     - path: /etc/docker/daemon.json
       mode: 0644
@@ -108,7 +108,7 @@ storage:
     - path: /etc/profile.d/motd.sh
       mode: 0755
       contents:
-        local: os-configs/powder/motd.sh
+        local: os-configs/legacy/powder/motd.sh
 
     - path: /etc/modules-load.d/powder.conf
       mode: 0644
@@ -201,10 +201,6 @@ systemd:
 
         [Install]
         WantedBy=multi-user.target
-
-    # Cockpit web UI, socket-activated: https://powder:9090
-    - name: cockpit.socket
-      enabled: true
 
     ##################################################################
     # Docker Compose stacks — one stack@ instance per directory under

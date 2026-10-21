@@ -16,7 +16,7 @@
 # After that, push to git — gitops-sync pulls every 5 minutes.
 #
 # uCore image: ghcr.io/ublue-os/ucore-minimal:stable
-#   Docker + compose, Tailscale, Cockpit.
+#   Docker + compose, Tailscale.
 #
 # Anything that gitops-sync should be able to update later lives in
 # coreos/os-configs/ and is referenced here with `local:` / `contents_local:`.
@@ -60,13 +60,7 @@ storage:
     - path: /etc/zincati/config.d/55-updates-strategy.toml
       mode: 0644
       contents:
-        inline: |
-          [updates]
-          strategy = "periodic"
-          [[updates.periodic.window]]
-          days = [ "Sun" ]
-          start_time = "04:00"
-          length_minutes = 60
+        local: os-configs/common/zincati-updates.toml
 
     # Passwordless sudo for wheel (gitops-sync installs OS configs with sudo)
     - path: /etc/sudoers.d/wheel-nopasswd
@@ -88,10 +82,10 @@ storage:
     # Files shared with gitops-sync (coreos/os-configs/manifest.conf).
     # Same source on first boot and on every later change.
     ##################################################################
-    - path: /etc/sysctl.d/90-arr-tuning.conf
+    - path: /etc/sysctl.d/90-base.conf
       mode: 0644
       contents:
-        local: os-configs/sysctl-90-arr-tuning.conf
+        local: os-configs/sysctl-90-base.conf
 
     - path: /etc/docker/daemon.json
       mode: 0644
@@ -111,8 +105,7 @@ storage:
     - path: /etc/modules-load.d/home.conf
       mode: 0644
       contents:
-        inline: |
-          tun
+        local: os-configs/charm/modules-load.conf
 
 systemd:
   units:
@@ -198,10 +191,6 @@ systemd:
 
         [Install]
         WantedBy=multi-user.target
-
-    # Cockpit web UI, socket-activated: https://charm:9090
-    - name: cockpit.socket
-      enabled: true
 
     ##################################################################
     # Docker Compose stacks — one stack@ instance per directory under

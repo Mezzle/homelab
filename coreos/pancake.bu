@@ -24,7 +24,7 @@
 # First boot rebases stock Fedora CoreOS to uCore (two automatic reboots).
 # uCore image: ghcr.io/ublue-os/ucore-minimal:stable-nvidia-lts
 #   Docker + compose, NVIDIA open drivers (LTS, Maxwell support),
-#   nvidia-container-toolkit (CDI), Tailscale, Cockpit.
+#   nvidia-container-toolkit (CDI), Tailscale.
 #
 # Anything that gitops-sync should be able to update later lives in
 # coreos/os-configs/ and is referenced here with `local:` / `contents_local:`.
@@ -91,13 +91,7 @@ storage:
     - path: /etc/zincati/config.d/55-updates-strategy.toml
       mode: 0644
       contents:
-        inline: |
-          [updates]
-          strategy = "periodic"
-          [[updates.periodic.window]]
-          days = [ "Sun" ]
-          start_time = "04:00"
-          length_minutes = 60
+        local: os-configs/common/zincati-updates.toml
 
     # Passwordless sudo for wheel (gitops-sync installs OS configs with sudo)
     - path: /etc/sudoers.d/wheel-nopasswd
@@ -119,10 +113,15 @@ storage:
     # Files shared with gitops-sync (coreos/os-configs/manifest.conf).
     # Same source on first boot and on every later change.
     ##################################################################
+    - path: /etc/sysctl.d/90-base.conf
+      mode: 0644
+      contents:
+        local: os-configs/sysctl-90-base.conf
+
     - path: /etc/sysctl.d/90-arr-tuning.conf
       mode: 0644
       contents:
-        local: os-configs/sysctl-90-arr-tuning.conf
+        local: os-configs/pancake/sysctl-90-arr-tuning.conf
 
     - path: /etc/docker/daemon.json
       mode: 0644
@@ -142,9 +141,7 @@ storage:
     - path: /etc/modules-load.d/pancake.conf
       mode: 0644
       contents:
-        inline: |
-          fuse
-          tun
+        local: os-configs/pancake/modules-load.conf
 
     - path: /usr/local/sbin/nas-mount-check.sh
       mode: 0755
@@ -240,10 +237,6 @@ systemd:
 
         [Install]
         WantedBy=multi-user.target
-
-    # Cockpit web UI, socket-activated: https://pancake:9090
-    - name: cockpit.socket
-      enabled: true
 
     ##################################################################
     # HDD storage mount — /var/mnt/storage

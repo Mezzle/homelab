@@ -132,7 +132,7 @@ The instance will boot and immediately begin the uCore auto-rebase process:
 
 1. **First boot:** Stock Fedora CoreOS starts, rebases to unsigned uCore image, reboots (~3-5 min)
 2. **Second boot:** Rebases to signed uCore image, reboots (~3-5 min)
-3. **Third boot:** uCore is running. Docker, Tailscale, and Cockpit are available.
+3. **Third boot:** uCore is running. Docker and Tailscale are available.
 
 Monitor progress from the OCI Console serial console, or just wait ~10 minutes.
 
@@ -355,9 +355,6 @@ ssh mez@powder
 # OS updates and package layering do not work on powder: /boot (350M) has
 # no room for a second aarch64 deployment. Do not try.
 
-# Cockpit web UI
-# https://powder:9090
-
 # Everything else is handled by gitops-sync (pulls git every 5 min)
 ```
 
@@ -366,7 +363,7 @@ ssh mez@powder
 ```
 powder (Oracle Cloud Always Free)
 ├── Ampere A1.Flex — 2 OCPU, 12GB RAM, 100GB disk (aarch64)
-├── uCore (Fedora CoreOS + Docker + Tailscale + Cockpit)
+├── uCore (Fedora CoreOS + Docker + Tailscale)
 ├── Tailscale exit node
 ├── docker/powder/infra/
 │   └── Portainer Agent (managed from pancake)

@@ -3,7 +3,7 @@
 # validate.sh — everything CI checks, runnable locally before a push
 #
 #   1. docker compose config for every stack (using .env.example if no .env)
-#   2. butane --strict for every coreos/*.bu, resolving os-configs/ references
+#   2. butane --strict for every coreos/*.bu and coreos/legacy/*.bu, resolving os-configs/ references
 #   3. every manifest.conf source exists and every file under os-configs that
 #      looks deployable is listed
 #   4. shellcheck on all shell scripts (skipped with a warning if not installed)
@@ -28,8 +28,8 @@ else
   BUTANE=()
 fi
 if ((${#BUTANE[@]})); then
-  for bu in coreos/*.bu; do
-    if (cd coreos && "${BUTANE[@]}" --strict -d . "$(basename "$bu")" > /dev/null); then
+  for bu in coreos/*.bu coreos/legacy/*.bu; do
+    if (cd coreos && "${BUTANE[@]}" --strict -d . "${bu#coreos/}" > /dev/null); then
       ok "butane $bu"
     else
       fail "butane $bu"

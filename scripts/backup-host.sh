@@ -11,7 +11,7 @@
 # Destination (BACKUP_DEST, first match wins):
 #   1. $BACKUP_DEST from the environment
 #   2. /var/mnt/nas/backup/<host>   if the NAS backup share is mounted (pancake)
-#   3. /var/backups/homelab/<host>  local fallback (charm, powder)
+#   3. /var/backups/homelab/<host>  local fallback (charm)
 # The local fallback protects against bad upgrades and accidental deletion,
 # not disk loss. Ship it off-host (restic/rclone) when a target is chosen.
 #
@@ -33,7 +33,7 @@ STACKS_DIR="/srv/docker/$HOST"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
 DATE=$(date +%Y-%m-%d_%H%M)
 TOKEN_MAP="/srv/docker/$HOST/monitoring/heartbeat-tokens.env"
-KUMA_PUSH_BASE="${KUMA_PUSH_BASE:-http://powder:3001}"
+KUMA_PUSH_BASE="${KUMA_PUSH_BASE:-https://watch.${TAILNET:-corgi-justice.ts.net}}"
 SKIP_STACKS=(arr)
 ERRORS=0
 

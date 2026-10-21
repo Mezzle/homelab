@@ -9,7 +9,6 @@ case "${1:-help}" in
   recyclarr-sync) docker exec recyclarr recyclarr sync ;;
   bootstrap)      ./scripts/bootstrap.sh ;;
   bootstrap-dry)  ./scripts/bootstrap.sh --dry ;;
-  clean)          docker system prune -f --volumes=false ;;
   help)
     cat <<'HELP'
 
@@ -19,7 +18,6 @@ arr commands:
   recyclarr-sync  Trigger an immediate Recyclarr sync
   bootstrap       Run first-time auto-configuration
   bootstrap-dry   Preview what bootstrap would configure
-  clean           Remove stopped containers and dangling images
 HELP
     ;;
   *) echo "Unknown command: $1" >&2; exit 1 ;;
