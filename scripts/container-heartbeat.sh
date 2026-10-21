@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 ###############################################################################
-# container-heartbeat.sh — push per-container health to Uptime Kuma
+# container-heartbeat.sh — push container health and disk usage to Uptime Kuma
 #
 # Background containers (recyclarr, rclone-seedbox, backup, docktail, …) have
-# no HTTP port for Kuma to probe. Instead this script runs on each host from
-# cron, inspects every container it's told to watch, and pings that
-# container's Kuma PUSH monitor with up/down.
+# no HTTP port for Kuma to probe. This script runs on each host from a timer,
+# inspects every container it's told to watch, and pings that container's
+# Kuma PUSH monitor with up/down. Filesystems are checked the same way.
 #
 # Health logic per container:
 #   - not present / not running        -> push status=down
@@ -15,45 +15,52 @@
 #         unhealthy                    -> push status=down
 #   - running, no healthcheck          -> push status=up  (running is all we have)
 #
-# A container going Down stops nothing here — Kuma flips the monitor and fires
-# the configured notifications. Kuma's own "No heartbeat in the time
-# window" also covers the case where THIS host or cron dies (the push simply
-# stops), so a dead heartbeat script is itself an alert.
+# Disk logic: usage at or above DISK_THRESHOLD percent -> push status=down,
+# with the percentage in the message.
 #
-# Config: a token map file, one "container<TAB>pushtoken" per line, at
+# A monitor going Down stops nothing here — Kuma flips the monitor and fires
+# the Discord + Hermes-agent webhooks. Kuma's own "No heartbeat in the time
+# window" also covers the case where THIS host or the timer dies (the push
+# simply stops), so a dead heartbeat script is itself an alert.
+#
+# Config: a token map file, one "<name><TAB><pushtoken>" per line, at
 #   /srv/docker/<host>/monitoring/heartbeat-tokens.env
-# (deployed by sync-secrets.sh from 1Password; NOT committed). Lines starting
-# with # and blank lines are ignored. "container" is the docker container name;
-# it may differ from the Kuma monitor name (e.g. "docktail" here maps to the
-# "docktail (pancake)" monitor's token).
+# (deployed out of band; NOT committed). Lines starting with # and blank
+# lines are ignored. <name> is one of:
+#   <container>       docker container name (may differ from the Kuma monitor
+#                     name, e.g. "docktail" -> the "docktail (pancake)" monitor)
+#   disk:<mountpoint> filesystem to check, e.g. disk:/var or disk:/var/mnt/storage
+#                     (/ is composefs on Fedora CoreOS and always reads 100%;
+#                     /var is the real disk)
+#   host-backup       reserved for backup-host.sh; skipped here. (A container
+#                     named "backup" is just a container.)
 #
-# Kuma push endpoint base is KUMA_PUSH_BASE. It defaults to watch over
-# Tailscale HTTPS; set TAILNET if the tailnet DNS suffix changes.
+# Kuma push endpoint base defaults to Watch over Tailscale HTTPS. Set TAILNET
+# if the tailnet DNS suffix changes.
 #
-# Deployed via the repo; run by container-heartbeat cron/timer every 60s.
+# Deployed via coreos/os-configs/manifest.conf; run by container-heartbeat.timer.
 ###############################################################################
 set -uo pipefail
 
 KUMA_PUSH_BASE="${KUMA_PUSH_BASE:-https://watch.${TAILNET:-corgi-justice.ts.net}}"
+HOST=$(hostname -s)
 TOKEN_MAP="${TOKEN_MAP:-}"
+DISK_THRESHOLD="${DISK_THRESHOLD:-90}"
 CURL_TIMEOUT=10
 
 log() { echo "[container-heartbeat] $*"; }
 
-# Locate the token map if not given explicitly: try each host's monitoring dir.
 if [[ -z "$TOKEN_MAP" ]]; then
-  for h in pancake charm powder watch; do
-    cand="/srv/docker/$h/monitoring/heartbeat-tokens.env"
-    [[ -f "$cand" ]] && { TOKEN_MAP="$cand"; break; }
-  done
+  candidate="/srv/docker/$HOST/monitoring/heartbeat-tokens.env"
+  [[ -f "$candidate" ]] && TOKEN_MAP="$candidate"
 fi
 
 if [[ -z "$TOKEN_MAP" || ! -f "$TOKEN_MAP" ]]; then
-  log "ERROR: no token map found (looked for /srv/docker/<host>/monitoring/heartbeat-tokens.env)"
+  log "ERROR: no token map found at /srv/docker/$HOST/monitoring/heartbeat-tokens.env"
   exit 1
 fi
 
-# Return the effective status word for a container: up | down | starting-up
+# Return the effective status word for a container: up | <state> | unhealthy
 container_status() {
   local name="$1" state health
   state=$(docker inspect "$name" --format '{{.State.Status}}' 2>/dev/null) || {
@@ -62,40 +69,57 @@ container_status() {
   if [[ "$state" != "running" ]]; then
     echo "$state"; return
   fi
-  # running — check health if a healthcheck exists
   health=$(docker inspect "$name" --format '{{if .Config.Healthcheck}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null)
   case "$health" in
-    healthy|none) echo "up" ;;
-    starting)     echo "up" ;;   # startup grace — treat as up, don't alarm
-    unhealthy)    echo "unhealthy" ;;
-    *)            echo "up" ;;    # unknown health string, but it IS running
+    unhealthy) echo "unhealthy" ;;
+    *)         echo "up" ;;      # healthy, starting, none, or unknown but running
   esac
+}
+
+# Print "up <pct>%" or "down <pct>%" for a mount point.
+disk_status() {
+  local mount="$1" pct
+  pct=$(df --output=pcent "$mount" 2>/dev/null | tail -1 | tr -dc '0-9')
+  if [[ -z "$pct" ]]; then
+    echo "down not-mounted"; return
+  fi
+  if (( pct >= DISK_THRESHOLD )); then
+    echo "down ${pct}%"
+  else
+    echo "up ${pct}%"
+  fi
 }
 
 push() {
   local token="$1" status="$2" msg="$3"
   curl -fsS -m "$CURL_TIMEOUT" -o /dev/null \
-    "${KUMA_PUSH_BASE}/api/push/${token}?status=${status}&msg=$(printf '%s' "$msg" | sed 's/ /%20/g')&ping=" \
+    "${KUMA_PUSH_BASE}/api/push/${token}?status=${status}&msg=$(printf '%s' "$msg" | sed 's/%/%25/g;s/ /%20/g')&ping=" \
     2>/dev/null
 }
 
 rc=0
-while IFS=$'\t' read -r container token; do
-  # skip comments / blanks
-  [[ -z "${container// }" || "${container:0:1}" == "#" ]] && continue
-  [[ -z "${token// }" ]] && { log "WARN: no token for '$container' — skipping"; continue; }
+while IFS=$'\t' read -r name token; do
+  [[ -z "${name// }" || "${name:0:1}" == "#" ]] && continue
+  [[ "$name" == "host-backup" ]] && continue
+  [[ -z "${token// }" ]] && { log "WARN: no token for '$name' — skipping"; continue; }
 
-  st=$(container_status "$container")
-  case "$st" in
-    up)
-      push "$token" up "OK" || { log "WARN: push failed for $container"; rc=1; }
+  case "$name" in
+    disk:*)
+      read -r status msg <<< "$(disk_status "${name#disk:}")"
+      [[ "$status" == "down" ]] && log "DOWN: $name ($msg)"
       ;;
     *)
-      # missing | exited | unhealthy | restarting | paused | dead ...
-      push "$token" down "$st" || { log "WARN: push(down) failed for $container"; rc=1; }
-      log "DOWN: $container ($st)"
+      st=$(container_status "$name")
+      if [[ "$st" == "up" ]]; then
+        status=up; msg=OK
+      else
+        status=down; msg="$st"
+        log "DOWN: $name ($st)"
+      fi
       ;;
   esac
+
+  push "$token" "$status" "$msg" || { log "WARN: push failed for $name"; rc=1; }
 done < "$TOKEN_MAP"
 
 exit "$rc"

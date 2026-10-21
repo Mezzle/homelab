@@ -231,8 +231,6 @@ services:
     depends_on:
       rclone-seedbox:
         condition: service_healthy
-      prowlarr:
-        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -277,8 +275,6 @@ services:
       - arr
     depends_on:
       rclone-seedbox:
-        condition: service_healthy
-      prowlarr:
         condition: service_healthy
     deploy:
       resources:

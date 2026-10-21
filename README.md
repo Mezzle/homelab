@@ -1,390 +1,145 @@
 # Homelab
 
-Infrastructure-as-code for a multi-machine homelab running [uCore](https://github.com/ublue-os/ucore) (Fedora CoreOS + Docker + NVIDIA + Tailscale) with GitOps deployment.
+Infrastructure-as-code for a multi-machine homelab using uCore at home and Ubuntu on Oracle Cloud, with Docker, Tailscale, and push-to-deploy via git.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────┐  ┌──────────────────────────────┐
 │  pancake (laptop)                           │  │  charm (mac mini)            │
-│  i7-5700HQ · 16GB · GTX 970M               │  │  i5-4260U · 4GB              │
+│  i7-5700HQ · 16GB · GTX 970M                │  │  i5-4260U · 4GB              │
 │                                             │  │                              │
-│  ┌─────────┐ ┌────────┐ ┌───────┐          │  │  ┌───────────┐ ┌──────────┐  │
-│  │   arr   │ │ immich │ │ music │          │  │  │   home    │ │monitoring│  │
-│  │ Plex    │ │ Photos │ │ Music │ ┌──────┐ │  │  │ Mosquitto │ │ AdGuard  │  │
-│  │ Sonarr  │ │ ML/GPU │ │ Asst  │ │infra │ │  │  │ Z2M       │ │ AG Sync  │  │
-│  │ Radarr  │ │ Pgvec  │ │       │ │Porta-│ │  │  │ MySQL     │ │          │  │
-│  │ Prowlarr│ │ Redis  │ │       │ │ Diun │ │  │  │           │ │          │  │
-│  │Scrypted │ │        │ │       │ │      │ │  │  │           │ │          │  │
-│  │ +more   │ │        │ │       │ │      │ │  │  │           │ │          │  │
-│  └─────────┘ └────────┘ └───────┘ └──────┘ │  │  └───────────┘ └──────────┘  │
-│  ┌───────────┐ ┌──────┐                     │  │                              │
-│  │ speedtest │ │ sure │                     │  │                              │
-│  └───────────┘ └──────┘                     │  │                              │
-│                                             │  │                              │
-│  SSD: OS + Docker + appdata                 │  │  SSD: everything (480GB)     │
-│  HDD: media, photos, rclone cache           │  │                              │
+│  arr        Plex, Sonarr, Radarr, Prowlarr, │  │  home        Mosquitto, MySQL│
+│             Bazarr, Recyclarr, Scrypted,    │  │  monitoring  AdGuard replica │
+│             gluetun, rclone, backup         │  │  infra       DockTail,       │
+│  immich     Photos, ML (GPU), Postgres      │  │              Portainer agent │
+│  music      Music Assistant                 │  │                              │
+│  speedtest  Speedtest Tracker               │  └──────────────────────────────┘
+│  sure       Personal finance                │
+│  infra      DockTail, Portainer, Homepage,  │
+│             Diun                            │  ┌──────────────────────────────┐
+│                                             │  │  watch (Oracle Cloud E2)     │
+│  SSD: OS + Docker + appdata                 │  │  Ubuntu · off-site           │
+│  HDD: rclone cache, music                   │  │                              │
+│  NAS (CIFS): media, photos, backups         │  │  monitoring  Uptime Kuma     │
 └─────────────────────────────────────────────┘  └──────────────────────────────┘
-         │                                                │
-         └──────────────── Tailscale mesh ────────────────┘
-                                │
-         ┌──────────────────────┼──────────────────────┐
-         │                      │                      │
-   ┌───────────┐  ┌──────────┐  ┌──────────────────────────┐
-   │  powder   │  │  watch   │  │         Other            │
-   │  OCI A1   │  │ OCI E2   │  │                          │
-   │  Ubuntu   │  │ Ubuntu   │  │  Dell — Home Assistant   │
-   │           │  │          │  │  Pi — AdGuard (primary)  │
-   │ Remote    │  │ Uptime   │  │                          │
-   │ dev       │  │ Kuma     │  └──────────────────────────┘
-   └───────────┘  └──────────┘
-     Oracle Cloud
-     Always Free
+   Other: Powder (Oracle ARM remote dev), Home Assistant (Dell), AdGuard (Pi)
+                       all connected over the Tailscale mesh
 ```
 
 ## Directory structure
 
 ```
-├── coreos/                          # OS provisioning
-│   ├── pancake.bu              #   Laptop — Butane config
-│   ├── charm.bu               #   Mac Mini — Butane config
-│   ├── legacy/powder.bu       #   Retired Oracle ARM CoreOS config
-│   ├── os-configs/                  #   Live-updatable OS configs
-│   │   ├── sysctl-90-arr-tuning.conf
-│   │   ├── docker-daemon.json
-│   │   └── sshd-50-hardening.conf
-│   └── transpile.sh                 #   .bu → .ign converter
-├── docker/                          # Docker Compose stacks
-│   ├── pancake/                #   Laptop stacks
-│   │   ├── arr/                     #     Media automation
-│   │   ├── immich/                  #     Photo management
-│   │   ├── music/                   #     Music Assistant
-│   │   ├── speedtest/               #     Speedtest Tracker
-│   │   ├── sure/                    #     Sure personal finance
-│   │   └── infra/                   #     Homepage + Portainer + Diun
-│   ├── charm/                 #   Mac Mini stacks
-│   │   ├── infra/                   #     Portainer agent
-│   │   ├── home/                    #     MQTT, Zigbee, MySQL
-│   │   └── monitoring/              #     AdGuard + AG Sync
-│   ├── legacy/powder/         #   Retired Portainer and Hermes stacks
-│   └── watch/                 #   Oracle micro monitoring
-│       └── monitoring/        #     Uptime Kuma
-├── cloud/
-│   ├── powder/                #   Ubuntu ARM dev-host provisioning
-│   └── watch/                 #   Ubuntu micro provisioning
-├── docs/
-│   ├── 1password-setup.md           #   Secrets reference & verification
-│   ├── oracle-reprovision.md        #   Monitoring migration and rebuild
-│   └── legacy/powder-coreos-setup.md
+├── coreos/                     # OS provisioning
+│   ├── pancake.bu, charm.bu     Butane configs (first boot only)
+│   ├── transpile.sh            #   .bu → .ign, substituting secrets from 1Password
+│   └── os-configs/             #   Files both Butane and gitops-sync install
+│       ├── manifest.conf       #     source → destination map for gitops-sync
+│       ├── common/             #     systemd units for every host (stack@, gitops, backup…)
+│       ├── pancake/ charm/       per-host files, units and drop-ins
+│       └── *.conf, *.json      #     shared sshd / sysctl / docker daemon config
+├── docker/<host>/<stack>/      # One Docker Compose stack per directory
+│   ├── docker-compose.yml
+│   ├── .env.example            #   keys synced from 1Password into .env (git-ignored)
+│   ├── stack.sh -> scripts/stack.sh
+│   ├── stack.local.sh          #   optional stack-specific commands (arr has one)
+│   ├── config/                 #   committed config files
+│   ├── scripts/                #   stack-specific scripts
+│   └── appdata/                #   container data (git-ignored)
+├── cloud/                      # Ubuntu cloud-init and bootstrap for powder/watch
 ├── scripts/
-│   ├── gitops-sync.sh               #   Auto-pull + apply from git
-│   ├── sync-secrets.sh              #   1Password → .env sync
-│   └── notify.sh                    #   Discord notification helper
-└── README.md
+│   ├── gitops-sync.sh          # timer: pull, sync secrets, apply changed stacks + OS configs
+│   ├── sync-secrets.sh         # 1Password → .env
+│   ├── container-heartbeat.sh  # timer: container health + disk usage → Uptime Kuma push
+│   ├── backup-host.sh          # timer: nightly appdata + database backups
+│   ├── bootstrap.sh            # first-time host setup after Ignition
+│   ├── validate.sh             # what CI runs: compose config, butane, manifest, shellcheck
+│   ├── stack.sh / stacks.sh    # shared wrappers (symlinked from each stack / host dir)
+│   └── notify.sh               # Discord helper sourced by the others
+├── docs/
+│   ├── 1password-setup.md      # every 1Password item and field
+│   ├── oracle-reprovision.md   # Oracle Cloud rebuild walkthrough
+│   └── legacy/                 # retired Powder CoreOS and Hermes docs
+└── AGENTS.md                   # gotchas for anyone (human or agent) editing this repo
 ```
 
-Each stack follows the same pattern:
+## How deployment works
 
-```
-stack-name/
-├── docker-compose.yml        # The stack definition
-├── .env.example              # Template for secrets (committed)
-├── .env                      # Actual secrets (git-ignored)
-├── stack.sh                  # ./stack.sh up/down/logs/status/etc
-├── appdata/                  # Container data (git-ignored)
-├── config/                   # Config files (committed)
-│   └── tailscale/            # Tailscale serve configs
-└── scripts/                  # Stack-specific scripts
-```
+1. Push to `main`.
+2. Every host runs `gitops-sync.timer` every 5 minutes. It pulls, syncs `.env` files from 1Password, runs `docker compose up -d` for any stack whose directory changed, and installs any changed file listed in `coreos/os-configs/manifest.conf` (with the matching reload).
+3. Failures post to Discord once per failure streak, and once more on recovery.
 
-## Quick start
+Butane configs only run on first boot. Anything a host might need updated later lives in `coreos/os-configs/` and is referenced from the `.bu` files with `local:` / `contents_local:`, so a fresh install and gitops-sync install the same bytes. `scripts/gitops-sync.sh --apply-os-configs` installs every manifest entry regardless of what changed; use it on a host that predates a unit.
 
-### Initial setup (one-time per machine)
+Stacks start on boot through the `stack@<name>.service` template, which runs `compose up -d` on start and `compose stop` on stop. It never pulls, so upgrades are explicit (`stack.sh update`, prompted by Diun), and it never removes networks, so stacks that share one can't race on boot. A stopped container is exempt from `restart: unless-stopped`, which is what makes the mount ordering in the drop-ins hold. Mount and ordering dependencies are drop-ins under `coreos/os-configs/<host>/stack@<name>.service.d/`.
+
+## Day to day
 
 ```bash
-# 1. On your laptop, transpile the Butane config
-cd coreos
-./transpile.sh pancake.bu    # or charm.bu
+# On a host
+/srv/docker/pancake/arr/stack.sh status
+/srv/docker/pancake/arr/stack.sh logs sonarr
+/srv/docker/pancake/arr/stack.sh update      # pull + recreate this stack
+/srv/docker/pancake/stacks.sh status         # every container on the host
+journalctl -u gitops-sync.service -f
 
-# 2. Install Fedora CoreOS on the target machine
-coreos-installer install /dev/sda --ignition-file pancake.ign
-
-# 3. Reboot, then SSH in
-ssh mez@<ip>
-
-# 4. Clone this repo
-cd /srv
-git clone <repo-url> .
-
-# 5. Configure secrets for each stack
-cd docker/pancake/arr && cp .env.example .env && vim .env
-cd ../immich && cp .env.example .env && vim .env
-# ... repeat for each stack
-
-# 6. Start everything
-docker/pancake/arr/stack.sh up
-docker/pancake/immich/stack.sh up
-# ... or use the systemd services (they auto-start on boot)
+# From your laptop
+./scripts/validate.sh                        # before pushing
+git push                                     # deploys within 5 minutes
 ```
 
-### Day-to-day operations
+### Adding a stack
 
-```bash
-# On the server
-docker/pancake/arr/stack.sh status            # Check a stack
-docker/pancake/arr/stack.sh logs sonarr       # Tail specific service logs
+1. Create `docker/<host>/<stack>/docker-compose.yml` and `.env.example`. Copy the `x-logging`, `x-healthcheck-defaults` anchors and the `docktail.service.*` labels from a neighbour.
+2. `ln -s ../../../scripts/stack.sh docker/<host>/<stack>/stack.sh`
+3. Add the 1Password item `docker.<host>.<stack>` with a field per key in `.env.example` (see `docs/1password-setup.md`).
+4. Add `stack@<stack>.service` to the host's `.bu` so a reinstall starts it, and once on the live host: `sudo systemctl enable stack@<stack>.service`.
+5. If the infra stack's DockTail needs to reach it, add the network to `docker/<host>/infra/docker-compose.yml` and to the infra `order.conf` drop-in.
+6. Push.
 
-# From your laptop (push-to-deploy)
-vim docker/pancake/arr/docker-compose.yml  # Edit
-git add -A && git commit && git push     # Push
-# → gitops-sync picks it up within 5 minutes
-```
+### Where data lives
 
-## Adding a new stack
-
-You do NOT need to update Butane configs or systemd units. Just:
-
-### 1. Create the stack directory
-
-```bash
-mkdir -p docker/pancake/my-new-stack/{appdata,config}
-```
-
-### 2. Create the compose file
-
-```yaml
-# docker/pancake/my-new-stack/docker-compose.yml
-services:
-  my-service:
-    image: whatever/image:latest
-    restart: unless-stopped
-    volumes:
-      - ./appdata:/data
-    # ... your config
-```
-
-### 3. Create the env template
-
-```bash
-# docker/pancake/my-new-stack/.env.example
-SOME_SECRET=change-me
-```
-
-### 4. (Optional) Add a stack.sh
-
-Copy any existing stack's `stack.sh` — they're all identical except the project name in `status`.
-
-### 5. (Optional) Add Tailscale access
-
-Create `config/tailscale/<service>/serve.json` and add a `ts-<service>` sidecar to your compose file. Copy from any existing stack.
-
-### 6. Deploy
-
-```bash
-# Option A: Push to git (auto-deploys via gitops-sync)
-git add docker/pancake/my-new-stack
-git commit -m "Add my-new-stack"
-git push
-
-# Option B: Manual (on the server)
-cd /srv/docker/pancake/my-new-stack  # /srv is the repo root
-cp .env.example .env && vim .env
-docker compose up -d
-
-# Option C: Via Portainer UI
-# Navigate to https://portainer.<tailnet>.ts.net
-# Portainer can manage containers/stacks from the web UI
-```
-
-### Where to store data
-
-| Data type | Where | Why |
+| Data | Where | Backup |
 |---|---|---|
-| **App config/databases** | `./appdata/` (on SSD) | Fast I/O for SQLite/Postgres. Back up per stack; currently only `docker/pancake/arr` has an automated backup container. |
-| **Media files** (video, photos) | `/mnt/storage/...` (on HDD) | Large files, sequential reads, HDD is fine |
-| **Secrets** | `.env` file (git-ignored) | Never committed. See 1Password section below. |
-| **Container config** | `./config/` (committed) | Versioned, deployed via git |
+| App config and databases | `./appdata/` on the SSD | `backup.timer` nightly (all stacks); arr has its own sqlite-safe container |
+| Media, photos | NAS over CIFS, mounted by systemd on pancake | NAS |
+| rclone cache, music | `/var/mnt/storage` (pancake HDD) | none, rebuildable |
+| Secrets | `.env`, synced from 1Password | 1Password |
 
-### Backup coverage
+Backups land in `/var/mnt/nas/backup/<host>/` on pancake and `/var/backups/homelab/<host>/` on charm. Each host pushes a heartbeat to the `host-backup (<host>)` Uptime Kuma monitor, so a backup that stops running alerts.
 
-Current automated backup coverage:
+Portainer is a viewer. The repo is the source of truth; anything edited in Portainer is overwritten on the next sync.
 
-| Stack | Coverage |
-|---|---|
-| `docker/pancake/arr` | Automated SQLite/config tarball backups to the NAS backup share, with monthly verification. |
-| `docker/pancake/sure` | Daily `pg_dump` to the NAS backup share (`backups/sure`), 14-day retention. Uploaded files in the `sure_app-storage` volume are not backed up. |
-| Other stacks | Not yet automated in this repo. Prioritise Immich Postgres/photos metadata, Home Assistant MySQL, Uptime Kuma, AdGuard, Portainer, Homepage, and Music Assistant state. |
+## Secrets
 
-Before adding more services, make sure each stateful stack has a documented restore path and a periodic verification job.
+Secrets live in the 1Password vault `Homelab`. Each stack has an item named after its path with dots, `docker.pancake.arr`, and one field per key in `.env.example`. `sync-secrets.sh` writes them into `.env` on every gitops run, so adding a key is: add it to `.env.example`, add the field in 1Password, push. Non-secret configuration belongs in the compose file as a `${VAR:-default}`, not in 1Password.
 
-### What about Portainer?
+Full item list and verification snippet: `docs/1password-setup.md`.
 
-**Portainer** is included in the `infra` stack. Use it for:
-- Viewing container status, logs, and resource usage
-- Quick restarts or pulls when you don't want to SSH in
-- Managing containers across all three servers from a single UI
+## Monitoring
 
-**Don't use Portainer as the source of truth** — the git repo is. If you edit a compose file in Portainer, the next gitops-sync will overwrite it. Edit in git, push, let it deploy.
+| Layer | Tool | Catches |
+|---|---|---|
+| Reachability | Uptime Kuma on watch (off-site) | host or service down, internet or power outage |
+| Container health | `container-heartbeat.timer` → Kuma push monitors | background containers with no port, unhealthy healthchecks |
+| Disk | same timer, `disk:` entries | `/var` (and pancake's HDD) at 90% |
+| Backups | `backup-host.sh` → Kuma push monitor | backup silently not running |
+| Stale NAS mounts | `nas-mount-check.timer` on pancake | CIFS ESTALE while systemd still says mounted |
+| Image updates | Diun | new tags, daily |
+| Sync failures | `gitops-sync.sh` ERR trap → Discord | pull can't fast-forward, missing `op`, bad manifest |
 
-### Launching ad-hoc containers
+## Tailscale services
 
-For quick experiments or one-off containers that don't need to be in git:
-
-```bash
-# Just run them directly
-docker run -d --name test-thing -p 8080:8080 whatever/image
-
-# Or create a stack in a local-only directory
-mkdir -p /srv/docker/scratch/my-experiment
-cd /srv/docker/scratch/my-experiment
-# compose file here — it won't be in git, won't be synced
-```
-
-The `scratch/` directory isn't part of any server's stack tree, so gitops-sync ignores it.
-
-## Secrets management with 1Password
-
-Instead of manually copying `.env` files to each machine, use a **1Password Service Account** to pull secrets automatically.
-
-### Setup
-
-1. Create a 1Password Service Account at https://my.1password.com → Developer → Service Accounts
-2. Create a vault called "Homelab" and grant the service account read access
-3. Store each stack's secrets as items:
-   - Item name: `docker/pancake/arr` (matches the stack path)
-   - Fields: `SEEDBOX_HOST`, `PIA_USER`, `NAS_HOST`, etc.
-
-4. Save the service account token on each machine:
-
-```bash
-# One-time, on each server
-echo "OP_SERVICE_ACCOUNT_TOKEN=ops_xxxxx" | sudo tee /etc/1password-service-account.env
-sudo chmod 600 /etc/1password-service-account.env
-```
-
-### How it works
-
-The `gitops-sync.sh` script (and the bootstrap helper below) can pull secrets from 1Password and write `.env` files. Install the 1Password CLI on CoreOS:
-
-```bash
-# Layer the 1password-cli onto CoreOS (one-time)
-sudo rpm-ostree install 1password-cli
-sudo systemctl reboot
-```
-
-Then use the included sync script:
-
-```bash
-# Sync all stacks for this server
-./scripts/sync-secrets.sh
-
-# Sync a specific stack
-./scripts/sync-secrets.sh docker/pancake/arr
-```
-
-### Validating Compose files
-
-Run the validator before pushing stack changes:
-
-```bash
-# Validate every stack
-./scripts/validate-compose.sh
-
-# Validate one stack
-./scripts/validate-compose.sh docker/pancake/arr
-```
-
-`gitops-sync.sh` also runs `docker compose config --quiet` before applying any changed stack.
-
-This means you:
-1. Store secrets in 1Password once
-2. Install the service account token on each machine once
-3. Run `sync-secrets.sh` to populate all `.env` files
-4. The gitops-sync can optionally call this before deploying
-
-## Tailscale service map
-
-After deployment, all services are accessible via Tailscale with automatic HTTPS:
-
-### pancake (laptop)
-
-| Service | Tailnet URL |
-|---|---|
-| Plex | `https://plex.<tailnet>.ts.net` |
-| Sonarr | `https://sonarr.<tailnet>.ts.net` |
-| Radarr | `https://radarr.<tailnet>.ts.net` |
-| Prowlarr | `https://prowlarr.<tailnet>.ts.net` |
-| Bazarr | `https://bazarr.<tailnet>.ts.net` |
-| Immich | `https://immich.<tailnet>.ts.net` |
-| Music Assistant | `https://music.<tailnet>.ts.net` |
-| Homepage | `https://homepage.<tailnet>.ts.net` |
-| Portainer | `https://portainer.<tailnet>.ts.net` |
-| Speedtest Tracker | `https://speedtest.<tailnet>.ts.net` |
-| Sure | `https://sure.<tailnet>.ts.net` |
-| Scrypted | `https://scrypted.<tailnet>.ts.net` |
-
-### charm (mac mini)
-
-| Service | Tailnet URL |
-|---|---|
-| Portainer (agent) | `https://portainer-charm.<tailnet>.ts.net` |
-| Zigbee2MQTT | `https://z2m.<tailnet>.ts.net` |
-| AdGuard Home | `https://adguard-backup.<tailnet>.ts.net` |
-
-### Oracle Cloud
-
-| Service | Tailnet URL |
-|---|---|
-| Uptime Kuma (`watch`) | `https://watch.<tailnet>.ts.net` |
-| Remote development (`powder`) | SSH through Tailscale |
-
-### Other
-
-| Service | Location |
-|---|---|
-| Home Assistant | Dell box (direct) |
-| AdGuard (primary) | Raspberry Pi (direct) |
-| Mosquitto (MQTT) | `mosquitto.<tailnet>.ts.net:1883` |
-| MySQL | `charm:3306` (LAN only) |
+DockTail publishes labelled home containers as Tailscale Services at `https://<name>.<tailnet>.ts.net`. Watch exposes Uptime Kuma through Tailscale Serve.
 
 ## OS management
 
-The two home servers run [uCore](https://github.com/ublue-os/ucore), an opinionated Fedora CoreOS image with Docker, Tailscale, and cockpit pre-installed.
-
-- **pancake:** `ucore-minimal:stable-nvidia-lts` (NVIDIA LTS drivers for Maxwell GPU)
-- **charm:** `ucore-minimal:stable`
-- **powder:** Ubuntu Server 24.04 ARM64, configured by `cloud/powder`
-- **watch:** Ubuntu Server 24.04 x86_64, configured by `cloud/watch`
-
-The uCore rebase instructions below apply only to `pancake` and `charm`.
-
-### Updates
+Pancake uses `ucore-minimal:stable-nvidia-lts` for the Maxwell GPU and charm uses `ucore-minimal:stable`. Powder and watch run Ubuntu and are provisioned from `cloud/`.
 
 ```bash
-rpm-ostree status              # Current and previous OS versions
-rpm-ostree upgrade             # Pull latest uCore image
-sudo systemctl reboot          # Apply after upgrade
+rpm-ostree status              # current and previous deployments
+rpm-ostree upgrade && sudo systemctl reboot
+sudo rpm-ostree rollback && sudo systemctl reboot
 ```
 
-### Rollback
-
-If an update breaks something, the previous version is still on disk:
-
-```bash
-sudo rpm-ostree rollback
-sudo systemctl reboot
-```
-
-### Management
-
-```bash
-# Cockpit web UI (enabled by default)
-# https://pancake:9090 or https://charm:9090 or https://powder:9090
-
-# Tailscale SSH (enabled by default)
-ssh pancake               # via tailnet hostname
-
-# Toolbox for a temporary mutable environment
-toolbox enter
-# now you're in a Fedora container with dnf, gcc, etc.
-```
+For a fresh uCore install, run `cd coreos && ./transpile.sh <host>.bu`, install the resulting `.ign`, wait for the rebase reboots, then run `scripts/bootstrap.sh docker/<host>`. Oracle hosts use the cloud-init and bootstrap flow in `docs/oracle-reprovision.md`.

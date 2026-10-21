@@ -71,11 +71,13 @@ services:
       resources:
         limits:
           memory: 3G
+    # powder has a public IP. The OCI security list blocks these ports today;
+    # binding to the Tailscale address means nothing depends on that.
     ports:
-      - 9119:9119
+      - ${TAILSCALE_IP:-0.0.0.0}:9119:9119
       # Uptime Kuma posts alert webhooks here; the gateway delivers them to
       # the configured Telegram home channel.
-      - 8644:8644
+      - ${TAILSCALE_IP:-0.0.0.0}:8644:8644
     labels:
       - "docktail.service.enable=true"
       - "docktail.service.name=hermes"
@@ -100,7 +102,7 @@ services:
       HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD}
       # Stable signing key — without it sessions are invalidated on restart.
       HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${HERMES_DASHBOARD_BASIC_AUTH_SECRET}
-      HERMES_DASHBOARD_PUBLIC_URL: https://hermes.corgi-justice.ts.net
+      HERMES_DASHBOARD_PUBLIC_URL: https://hermes.${TAILNET}.ts.net
     command: ["gateway", "run"]
     volumes:
       - ./appdata/hermes:/opt/data:z

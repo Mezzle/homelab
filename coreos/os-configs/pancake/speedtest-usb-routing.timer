@@ -1,0 +1,10 @@
+[Unit]
+Description=Re-apply speedtest USB routing periodically (self-heal after docker restarts)
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Unit=speedtest-usb-routing.service
+
+[Install]
+WantedBy=timers.target

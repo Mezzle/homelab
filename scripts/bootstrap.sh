@@ -10,7 +10,8 @@
 #   2. Sets up the 1Password service account token
 #   3. Clones the git repo to /srv
 #   4. Syncs secrets from 1Password into .env files
-#   5. Starts all Docker stacks
+#   5. Installs the OS configs and units from coreos/os-configs/manifest.conf
+#   6. Starts all Docker stacks
 #
 # Usage:
 #   ssh mez@<hostname>
@@ -63,7 +64,7 @@ else
   esac
 
   TMPDIR=$(mktemp -d)
-  trap "rm -rf $TMPDIR" EXIT
+  trap 'rm -rf "$TMPDIR"' EXIT
 
   curl -sSL "https://cache.agilebits.com/dist/1P/op2/pkg/v2.30.3/op_linux_${OP_ARCH}_v2.30.3.zip" \
     -o "$TMPDIR/op.zip"
@@ -152,7 +153,15 @@ for stack_dir in "$REPO_DIR/$SERVER_DIR"/*/; do
 done
 
 ###############################################################################
-# Step 5: Start stacks
+# Step 5: OS configs and systemd units from the manifest
+###############################################################################
+log "Applying OS configs from coreos/os-configs/manifest.conf..."
+GITOPS_SERVER_DIR="$SERVER_DIR" /bin/bash "$REPO_DIR/scripts/gitops-sync.sh" --apply-os-configs \
+  || warn "OS config apply had issues"
+sudo systemctl daemon-reload
+
+###############################################################################
+# Step 6: Start stacks
 ###############################################################################
 log "Starting Docker stacks..."
 for stack_dir in "$REPO_DIR/$SERVER_DIR"/*/; do

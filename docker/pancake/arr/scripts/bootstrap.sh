@@ -106,7 +106,6 @@ SONARR_URL="http://sonarr:8989"
 RADARR_URL="http://radarr:7878"
 PROWLARR_URL="http://prowlarr:9696"
 BAZARR_URL="http://bazarr:6767"
-PLEX_URL="http://plex:32400"
 # gluetun's built-in HTTP proxy — Prowlarr tunnels indexer searches through it
 GLUETUN_PROXY_HOST="gluetun"
 GLUETUN_PROXY_PORT=8888
@@ -252,9 +251,6 @@ fi
 # 4. Bazarr → Sonarr/Radarr
 ###############################################################################
 log "Configuring Bazarr connections..."
-
-# Get current Bazarr settings
-BAZARR_SETTINGS=$(api_get "$BAZARR_URL/api/system/settings?apikey=$BAZARR_KEY")
 
 # Update Sonarr connection
 STATUS=$(api_call POST "$BAZARR_URL/api/system/settings?apikey=$BAZARR_KEY" \

@@ -1,0 +1,30 @@
+# Docker Compose stack template. Enable one instance per stack:
+#   systemctl enable --now stack@arr.service
+# %H is the hostname, %i the stack directory under /srv/docker/<host>/.
+#
+# Deliberately no pull, and `compose stop` rather than `compose down`.
+# Pulling on boot upgraded every floating-tag image on each reboot, so
+# upgrades are explicit (stack.sh update). `down` removed the networks other
+# stacks declare as external and raced them on the way back up; `stop` keeps
+# them. It also matters for ordering: a container that was *stopped* is
+# exempt from restart: unless-stopped, so on boot only this unit starts it,
+# after the mount drop-ins. Databases get a graceful stop at shutdown.
+[Unit]
+Description=Docker Compose stack: %i
+After=docker.service network-online.target
+Requires=docker.service
+ConditionPathExists=/srv/docker/%H/%i/docker-compose.yml
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=mez
+Group=mez
+WorkingDirectory=/srv/docker/%H/%i
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStop=/usr/bin/docker compose stop
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

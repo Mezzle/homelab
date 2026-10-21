@@ -38,10 +38,10 @@ UPK_TOTP = os.environ.get("UPK_TOTP", "")  # optional live 6-digit code
 
 TOKENS_ONLY = "--tokens" in sys.argv
 
-# Background containers to monitor, grouped by their host group name in Kuma.
-# interval = how often Kuma expects a heartbeat (seconds); the heartbeat cron
-# must run at least twice per interval. We use 120s interval / 60s cron.
-CONTAINER_MONITORS: dict[str, list[str]] = {
+# Push monitors grouped by their host group in Kuma. Containers and disks use
+# a 120-second interval with a 60-second timer; nightly backups use 26 hours.
+BACKUP_INTERVAL = 26 * 3600
+CONTAINER_MONITORS: dict[str, list] = {
     "pancake": [
         "recyclarr",
         "rclone-seedbox",
@@ -50,9 +50,14 @@ CONTAINER_MONITORS: dict[str, list[str]] = {
         "sure-backup",
         "portainer",
         "docktail (pancake)",
+        "disk /var (pancake)",
+        "disk /var/mnt/storage (pancake)",
+        ("host-backup (pancake)", BACKUP_INTERVAL),
     ],
     "charm": [
         "docktail (charm)",
+        "disk /var (charm)",
+        ("host-backup (charm)", BACKUP_INTERVAL),
     ],
 }
 
@@ -93,7 +98,8 @@ def main() -> None:
             if grp not in group_id:
                 log(f"FAIL: group '{grp}' not found — skipping its monitors")
                 continue
-            for name in names:
+            for entry in names:
+                name, interval = entry if isinstance(entry, tuple) else (entry, PUSH_INTERVAL)
                 if name in by_name:
                     m = by_name[name]
                     if m.get("type") == "push":
@@ -106,7 +112,7 @@ def main() -> None:
                     result = api.add_monitor(
                         type=MonitorType.PUSH,
                         name=name,
-                        interval=PUSH_INTERVAL,
+                        interval=interval,
                         parent=group_id[grp],
                         notificationIDList=NOTIFICATION_IDS,
                     )

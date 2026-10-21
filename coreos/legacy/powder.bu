@@ -4,39 +4,30 @@
 # Hardware: Oracle Cloud Always Free — Ampere A1.Flex
 #           2 OCPUs, 12GB RAM, 100GB boot volume (aarch64)
 #
-# Transpile to Ignition before use:
-#   ./transpile.sh powder.bu
-#
-# Then import the powdercloud aarch64 image to OCI and pass the
-# resulting powder.ign as instance userdata (metadata).
-#
-# Download the CoreOS image:
-#   https://builds.coreos.fedoraproject.org/streams/stable.json
-#   → architectures.aarch64.artifacts.powdercloud
+# Transpile with ./transpile.sh powder.bu, then pass powder.ign as instance
+# userdata. Full walkthrough in docs/powder-setup.md.
 #
 # After first boot:
 #   1. Wait for uCore auto-rebase (~2 reboots, ~5-10 min total)
 #   2. SSH in:  ssh mez@powder  (via Tailscale)
 #   3. Run the bootstrap script:
-#        curl -sL https://raw.githubusercontent.com/mez-0/arr/main/scripts/bootstrap.sh \
+#        curl -sL https://raw.githubusercontent.com/Mezzle/homelab/main/scripts/bootstrap.sh \
 #          | bash -s -- docker/powder
-#      Or manually: clone repo to /srv, then ./scripts/bootstrap.sh docker/powder
 #
-# After that, just push to git — the gitops-sync timer pulls changes
-# every 5 minutes and applies them automatically.
+# After that, push to git — gitops-sync pulls every 5 minutes.
 #
 # uCore image: ghcr.io/ublue-os/ucore:stable (ARM)
-#   - Docker (moby-engine) + docker-compose
-#   - Tailscale
-#   - Cockpit (web management)
-#   - Wireguard tools
+#   Docker + compose, Tailscale.
+#
+# /boot on powder (350M) has no room for a second aarch64 deployment, so
+# rpm-ostree layering and OS upgrades fail. Containerise instead.
+#
+# Anything that gitops-sync should be able to update later lives in
+# coreos/os-configs/ and is referenced here with `local:` / `contents_local:`.
 ###############################################################################
 variant: fcos
 version: "1.7.0"
 
-########################################
-# Users
-########################################
 passwd:
   groups:
     - name: docker
@@ -49,35 +40,25 @@ passwd:
         - wheel
       shell: /bin/bash
 
-########################################
-# Storage — directories and config files
-########################################
 storage:
   directories:
-    # Repo root — /srv is a symlink to /var/srv on FCOS
-    # Don't create subdirectories here; git clone provides them
+    # Repo root — /srv is a symlink to /var/srv on FCOS.
+    # Don't create subdirectories here; git clone provides them.
     - path: /var/srv
       mode: 0755
       user: { name: mez }
       group: { name: mez }
 
-    # uCore auto-rebase tracking
     - path: /etc/ucore-autorebase
       mode: 0754
 
   files:
-    ##################################################################
-    # Hostname
-    ##################################################################
     - path: /etc/hostname
       mode: 0644
       contents:
         inline: powder
 
-    ##################################################################
-    # Zincati — automatic OS update strategy
-    # Reboots only on Sundays between 04:00-05:00 UTC
-    ##################################################################
+    # Zincati — reboot for OS updates only on Sundays 04:00-05:00 UTC.
     - path: /etc/zincati/config.d/55-updates-strategy.toml
       mode: 0644
       contents:
@@ -89,75 +70,16 @@ storage:
           start_time = "04:00"
           length_minutes = 60
 
-    ##################################################################
-    # Sysctl tuning — light touch for a cloud instance
-    ##################################################################
-    - path: /etc/sysctl.d/90-powder-tuning.conf
-      mode: 0644
-      contents:
-        inline: |
-          # inotify limits — containers watch many files
-          fs.inotify.max_user_watches=524288
-          fs.inotify.max_user_instances=512
-
-          # Network buffer tuning
-          net.core.rmem_max=4194304
-          net.core.wmem_max=4194304
-
-    ##################################################################
-    # Kernel modules
-    ##################################################################
-    - path: /etc/modules-load.d/powder.conf
-      mode: 0644
-      contents:
-        inline: |
-          tun
-
-    ##################################################################
-    # Docker daemon config
-    ##################################################################
-    - path: /etc/docker/daemon.json
-      mode: 0644
-      contents:
-        inline: |
-          {
-            "log-driver": "json-file",
-            "log-opts": {
-              "max-size": "10m",
-              "max-file": "3"
-            },
-            "storage-driver": "overlay2",
-            "live-restore": true,
-            "default-address-pools": [
-              {"base": "172.20.0.0/14", "size": 24}
-            ]
-          }
-
-    ##################################################################
-    # Passwordless sudo for wheel group
-    ##################################################################
+    # Passwordless sudo for wheel (gitops-sync installs OS configs with sudo)
     - path: /etc/sudoers.d/wheel-nopasswd
       mode: 0440
       contents:
         inline: |
           %wheel ALL=(ALL) NOPASSWD: ALL
 
-    ##################################################################
-    # SSH hardening
-    ##################################################################
-    - path: /etc/ssh/sshd_config.d/50-hardening.conf
-      mode: 0600
-      contents:
-        inline: |
-          PasswordAuthentication no
-          PermitRootLogin no
-          MaxAuthTries 3
-          ClientAliveInterval 300
-          ClientAliveCountMax 2
-
-    ##################################################################
-    # Tailscale auth key — used by tailscale-auth.service on first boot
-    ##################################################################
+    # Tailscale auth key — consumed and deleted by tailscale-auth.service.
+    # Replace with a reusable + ephemeral key from:
+    #   https://login.tailscale.com/admin/settings/keys
     - path: /etc/tailscale-authkey
       mode: 0600
       contents:
@@ -165,39 +87,46 @@ storage:
           tskey-auth-CHANGEME
 
     ##################################################################
-    # MOTD
+    # Files shared with gitops-sync (coreos/os-configs/manifest.conf).
+    # Same source on first boot and on every later change.
     ##################################################################
+    - path: /etc/sysctl.d/90-base.conf
+      mode: 0644
+      contents:
+        local: os-configs/sysctl-90-base.conf
+
+    - path: /etc/docker/daemon.json
+      mode: 0644
+      contents:
+        local: os-configs/docker-daemon.json
+
+    - path: /etc/ssh/sshd_config.d/50-hardening.conf
+      mode: 0600
+      contents:
+        local: os-configs/sshd-50-hardening.conf
+
     - path: /etc/profile.d/motd.sh
       mode: 0755
       contents:
-        inline: |
-          #!/bin/bash
-          echo ""
-          echo "  uCore — $(rpm-ostree status --booted | grep -oP 'Version: \K\S+' || echo 'unknown')"
-          echo "  Host: powder (Ampere A1 / Oracle Cloud)"
-          echo "  Tailscale: $(tailscale ip --4 || echo 'not connected')"
-          echo "  Cockpit:   https://localhost:9090"
-          echo "  Stacks:    /srv/docker/powder/{infra,monitoring}"
-          echo "  Commands:  /srv/docker/powder/stacks.sh help"
-          echo ""
-          docker ps --format "  {{.Names}}\t{{.Status}}" 2>/dev/null | sort | head -20
-          TOTAL=$(docker ps -q 2>/dev/null | wc -l)
-          [ "$TOTAL" -gt 20 ] && echo "  ... and $((TOTAL - 20)) more"
-          echo ""
+        local: os-configs/legacy/powder/motd.sh
 
-########################################
-# Systemd units
-########################################
+    - path: /etc/modules-load.d/powder.conf
+      mode: 0644
+      contents:
+        inline: |
+          tun
+
 systemd:
   units:
-    ##################################################################
-    # Enable Docker
-    ##################################################################
     - name: docker.service
       enabled: true
 
     ##################################################################
     # uCore auto-rebase — switch from stock CoreOS to uCore
+    #
+    # Two-stage process on first boot:
+    #   1. Rebase to unsigned uCore image → reboot
+    #   2. Rebase to signed uCore image → reboot
     ##################################################################
     - name: ucore-unsigned-autorebase.service
       enabled: true
@@ -242,7 +171,8 @@ systemd:
         WantedBy=multi-user.target
 
     ##################################################################
-    # Tailscale — host-level tailnet connectivity
+    # Tailscale — host-level tailnet connectivity (SSH, DNS, identity).
+    # Per-service HTTPS is handled by DockTail in each host's infra stack.
     ##################################################################
     - name: tailscaled.service
       enabled: true
@@ -273,149 +203,45 @@ systemd:
         WantedBy=multi-user.target
 
     ##################################################################
-    # Cockpit — web-based system management (socket-activated)
+    # Docker Compose stacks — one stack@ instance per directory under
+    # /srv/docker/powder/.
     ##################################################################
-    - name: cockpit.socket
+    - name: stack@.service
+      contents_local: os-configs/common/stack@.service
+
+    - name: stack@infra.service
+      enabled: true
+
+    - name: stack@monitoring.service
+      enabled: true
+
+    - name: stack@agent.service
       enabled: true
 
     ##################################################################
-    # Infra stack (Dockge agent) — auto-start on boot
-    ##################################################################
-    - name: infra-stack.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=Infra stack (docker compose)
-        After=docker.service network-online.target
-        Requires=docker.service
-        ConditionPathExists=/srv/docker/powder/infra/docker-compose.yml
-
-        [Service]
-        Type=oneshot
-        RemainAfterExit=yes
-        WorkingDirectory=/srv/docker/powder/infra
-        ExecStartPre=/usr/bin/docker compose pull --quiet
-        ExecStart=/usr/bin/docker compose up -d --remove-orphans
-        ExecStop=/usr/bin/docker compose down
-        TimeoutStartSec=300
-        User=mez
-        Group=mez
-
-        [Install]
-        WantedBy=multi-user.target
-
-    ##################################################################
-    # Monitoring stack — auto-start on boot
-    ##################################################################
-    - name: monitoring-stack.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=Monitoring stack (docker compose)
-        After=docker.service network-online.target
-        Requires=docker.service
-        ConditionPathExists=/srv/docker/powder/monitoring/docker-compose.yml
-
-        [Service]
-        Type=oneshot
-        RemainAfterExit=yes
-        WorkingDirectory=/srv/docker/powder/monitoring
-        ExecStartPre=/usr/bin/docker compose pull --quiet
-        ExecStart=/usr/bin/docker compose up -d --remove-orphans
-        ExecStop=/usr/bin/docker compose down
-        TimeoutStartSec=300
-        User=mez
-        Group=mez
-
-        [Install]
-        WantedBy=multi-user.target
-
-    ##################################################################
-    # Weekly container image cleanup
-    ##################################################################
-    - name: docker-prune.service
-      enabled: false
-      contents: |
-        [Unit]
-        Description=Prune unused Docker images and build cache
-
-        [Service]
-        Type=oneshot
-        ExecStart=/usr/bin/docker system prune -af --filter "until=168h"
-
-    - name: docker-prune.timer
-      enabled: true
-      contents: |
-        [Unit]
-        Description=Run Docker prune weekly
-
-        [Timer]
-        OnCalendar=Sun 05:30
-        Persistent=true
-        RandomizedDelaySec=600
-
-        [Install]
-        WantedBy=timers.target
-
-    ##################################################################
-    # GitOps sync
+    # Shared units from coreos/os-configs/common/. gitops-sync keeps
+    # them current after install; see manifest.conf.
     ##################################################################
     - name: gitops-sync.service
-      enabled: false
-      contents: |
-        [Unit]
-        Description=GitOps sync — pull git and apply changes
-        After=docker.service network-online.target
-        Requires=network-online.target
-        ConditionPathExists=/srv/.git
-
-        [Service]
-        Type=oneshot
-        WorkingDirectory=/srv
-        Environment=GITOPS_SERVER_DIR=docker/powder
-        ExecStart=/bin/bash /srv/scripts/gitops-sync.sh
-        User=mez
-        Group=mez
-        SupplementaryGroups=wheel
-
+      contents_local: os-configs/common/gitops-sync.service
     - name: gitops-sync.timer
       enabled: true
-      contents: |
-        [Unit]
-        Description=GitOps sync — poll git every 5 minutes
+      contents_local: os-configs/common/gitops-sync.timer
 
-        [Timer]
-        OnBootSec=2min
-        OnUnitActiveSec=5min
-        RandomizedDelaySec=30
-
-        [Install]
-        WantedBy=timers.target
-
-    ##################################################################
-    # Docker image update check (logs only)
-    ##################################################################
-    - name: docker-update-check.service
-      enabled: false
-      contents: |
-        [Unit]
-        Description=Check for Docker image updates
-
-        [Service]
-        Type=oneshot
-        WorkingDirectory=/srv
-        ExecStart=/bin/bash -c 'for d in docker/powder/infra docker/powder/monitoring; do echo "=== $d ===" && /usr/bin/docker compose -f $d/docker-compose.yml pull --dry-run 2>&1 | grep -v "up to date" || true; done'
-
-    - name: docker-update-check.timer
+    - name: docker-prune.service
+      contents_local: os-configs/common/docker-prune.service
+    - name: docker-prune.timer
       enabled: true
-      contents: |
-        [Unit]
-        Description=Check for Docker image updates daily
+      contents_local: os-configs/common/docker-prune.timer
 
-        [Timer]
-        OnCalendar=daily
-        Persistent=true
-        RandomizedDelaySec=3600
+    - name: container-heartbeat.service
+      contents_local: os-configs/common/container-heartbeat.service
+    - name: container-heartbeat.timer
+      enabled: true
+      contents_local: os-configs/common/container-heartbeat.timer
 
-        [Install]
-        WantedBy=timers.target
+    - name: backup.service
+      contents_local: os-configs/common/backup.service
+    - name: backup.timer
+      enabled: true
+      contents_local: os-configs/common/backup.timer
