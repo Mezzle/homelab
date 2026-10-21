@@ -35,22 +35,28 @@
 #   host-backup       reserved for backup-host.sh; skipped here. (A container
 #                     named "backup" is just a container.)
 #
-# Kuma push endpoint base is KUMA_PUSH_BASE (default http://powder:3001).
+# Kuma push endpoint base defaults to Watch over Tailscale HTTPS. Set TAILNET
+# if the tailnet DNS suffix changes.
 #
 # Deployed via coreos/os-configs/manifest.conf; run by container-heartbeat.timer.
 ###############################################################################
 set -uo pipefail
 
-KUMA_PUSH_BASE="${KUMA_PUSH_BASE:-http://powder:3001}"
+KUMA_PUSH_BASE="${KUMA_PUSH_BASE:-https://watch.${TAILNET:-corgi-justice.ts.net}}"
 HOST=$(hostname -s)
-TOKEN_MAP="${TOKEN_MAP:-/srv/docker/$HOST/monitoring/heartbeat-tokens.env}"
+TOKEN_MAP="${TOKEN_MAP:-}"
 DISK_THRESHOLD="${DISK_THRESHOLD:-90}"
 CURL_TIMEOUT=10
 
 log() { echo "[container-heartbeat] $*"; }
 
-if [[ ! -f "$TOKEN_MAP" ]]; then
-  log "ERROR: no token map at $TOKEN_MAP"
+if [[ -z "$TOKEN_MAP" ]]; then
+  candidate="/srv/docker/$HOST/monitoring/heartbeat-tokens.env"
+  [[ -f "$candidate" ]] && TOKEN_MAP="$candidate"
+fi
+
+if [[ -z "$TOKEN_MAP" || ! -f "$TOKEN_MAP" ]]; then
+  log "ERROR: no token map found at /srv/docker/$HOST/monitoring/heartbeat-tokens.env"
   exit 1
 fi
 

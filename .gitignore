@@ -20,6 +20,7 @@
 
 # Ignition files (generated from .bu)
 coreos/*.ign
+cloud/*/cloud-init.rendered.yaml
 
 # Python virtualenvs and bytecode
 **/.venv/

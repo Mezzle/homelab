@@ -7,16 +7,11 @@ Several homelab containers are background workers with no HTTP port to probe
 Uptime Kuma PUSH monitors: a per-host heartbeat script (container-heartbeat.sh)
 checks each container's docker state/health and pings the monitor's push URL
 only while it is healthy. If a container dies or goes unhealthy, the ping stops
-and Kuma flips the monitor Down -> fires the Discord + Hermes-agent webhooks.
-
-The same script pushes disk usage ("disk /var (host)" monitors, down at 90%;
-/ is composefs on Fedora CoreOS and always reads 100%, /var is the real disk),
-and backup-host.sh pushes once per nightly run ("host-backup (host)", 26h
-window). "backup" without a suffix is pancake's arr backup container.
+and Kuma flips the monitor Down and fires the configured notifications.
 
 This script is idempotent: it creates each monitor only if a monitor of the
-same name does not already exist, attaches BOTH notifications (Discord=1,
-Hermes=2), places it under the right host group, and prints the push token for
+same name does not already exist, attaches the Discord notification, places it
+under the right host group, and prints the push token for
 each so the heartbeat config can be generated.
 
 Auth: reads UPK_USER/UPK_PASS (and optional UPK_TOTP_SECRET for a TOTP code)
@@ -43,16 +38,8 @@ UPK_TOTP = os.environ.get("UPK_TOTP", "")  # optional live 6-digit code
 
 TOKENS_ONLY = "--tokens" in sys.argv
 
-# Push monitors to create, grouped by their host group name in Kuma. Each
-# entry is a name or a (name, interval) tuple. interval = how often Kuma
-# expects a heartbeat (seconds); the pusher must run at least twice per
-# interval. Containers and disks: 120s interval / 60s timer. Backups: once
-# a night, so a 26h window.
-#
-# Token map line names on the host (heartbeat-tokens.env):
-#   container name        -> its monitor
-#   disk:<mountpoint>     -> "disk <mountpoint> (<host>)"
-#   host-backup           -> "host-backup (<host>)"
+# Push monitors grouped by their host group in Kuma. Containers and disks use
+# a 120-second interval with a 60-second timer; nightly backups use 26 hours.
 BACKUP_INTERVAL = 26 * 3600
 CONTAINER_MONITORS: dict[str, list] = {
     "pancake": [
@@ -60,6 +47,7 @@ CONTAINER_MONITORS: dict[str, list] = {
         "rclone-seedbox",
         "backup",
         "speedtest",
+        "sure-backup",
         "portainer",
         "docktail (pancake)",
         "disk /var (pancake)",
@@ -71,15 +59,10 @@ CONTAINER_MONITORS: dict[str, list] = {
         "disk /var (charm)",
         ("host-backup (charm)", BACKUP_INTERVAL),
     ],
-    "powder": [
-        "docktail (powder)",
-        "disk /var (powder)",
-        ("host-backup (powder)", BACKUP_INTERVAL),
-    ],
 }
 
 PUSH_INTERVAL = 120
-NOTIFICATION_IDS = [1, 2]  # 1 = Discord, 2 = Hermes Agent webhook
+NOTIFICATION_IDS = [1]  # Discord
 
 
 def log(msg: str) -> None:

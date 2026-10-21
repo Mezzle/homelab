@@ -12,8 +12,9 @@ Butane files under `coreos/` only run at install. Editing a `.bu` changes nothin
 
 - **pancake** (laptop, x86, GPU) runs the media stacks. NAS shares are systemd CIFS automounts under `/var/mnt/nas/`, bind-mounted into containers with `rslave`. If a mount goes stale, `nas-mount-check.timer` repairs it; don't restart the mount unit by hand while containers hold it.
 - **charm** (Mac Mini, 4GB) runs home automation and the AdGuard replica.
-- **powder** (Oracle Cloud, aarch64) runs off-site monitoring and the Hermes agent. Its 350M `/boot` has no room for a second aarch64 deployment: `rpm-ostree install` and OS upgrades fail. Do not layer packages; containerise. `op` is a hand-placed binary in `/usr/local/bin`.
-- SSH as `mez` over Tailscale. All hosts are SELinux enforcing.
+- **powder** (Oracle Cloud, aarch64 Ubuntu) is the remote development host.
+- **watch** (Oracle Cloud, x86 Ubuntu) runs off-site Uptime Kuma monitoring.
+- SSH as `mez` over Tailscale. The uCore hosts are SELinux enforcing.
 
 ## Things that bite
 

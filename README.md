@@ -1,6 +1,6 @@
 # Homelab
 
-Infrastructure-as-code for a three-machine homelab running [uCore](https://github.com/ublue-os/ucore) (Fedora CoreOS + Docker + Tailscale) with push-to-deploy via git.
+Infrastructure-as-code for a multi-machine homelab using uCore at home and Ubuntu on Oracle Cloud, with Docker, Tailscale, and push-to-deploy via git.
 
 ## Architecture
 
@@ -15,16 +15,15 @@ Infrastructure-as-code for a three-machine homelab running [uCore](https://githu
 │  immich     Photos, ML (GPU), Postgres      │  │              Portainer agent │
 │  music      Music Assistant                 │  │                              │
 │  speedtest  Speedtest Tracker               │  └──────────────────────────────┘
+│  sure       Personal finance                │
 │  infra      DockTail, Portainer, Homepage,  │
 │             Diun                            │  ┌──────────────────────────────┐
-│                                             │  │  powder (Oracle Cloud ARM)   │
-│  SSD: OS + Docker + appdata                 │  │  Ampere A1 · 12GB · off-site │
+│                                             │  │  watch (Oracle Cloud E2)     │
+│  SSD: OS + Docker + appdata                 │  │  Ubuntu · off-site           │
 │  HDD: rclone cache, music                   │  │                              │
 │  NAS (CIFS): media, photos, backups         │  │  monitoring  Uptime Kuma     │
-└─────────────────────────────────────────────┘  │  agent       Hermes Agent    │
-                                                 │  infra       DockTail,       │
-   Other: Home Assistant (Dell), AdGuard (Pi)    │              Portainer agent │
-                                                 └──────────────────────────────┘
+└─────────────────────────────────────────────┘  └──────────────────────────────┘
+   Other: Powder (Oracle ARM remote dev), Home Assistant (Dell), AdGuard (Pi)
                        all connected over the Tailscale mesh
 ```
 
@@ -32,12 +31,12 @@ Infrastructure-as-code for a three-machine homelab running [uCore](https://githu
 
 ```
 ├── coreos/                     # OS provisioning
-│   ├── pancake.bu, charm.bu, powder.bu   Butane configs (first boot only)
+│   ├── pancake.bu, charm.bu     Butane configs (first boot only)
 │   ├── transpile.sh            #   .bu → .ign, substituting secrets from 1Password
 │   └── os-configs/             #   Files both Butane and gitops-sync install
 │       ├── manifest.conf       #     source → destination map for gitops-sync
 │       ├── common/             #     systemd units for every host (stack@, gitops, backup…)
-│       ├── pancake/ charm/ powder/       per-host files, units and drop-ins
+│       ├── pancake/ charm/       per-host files, units and drop-ins
 │       └── *.conf, *.json      #     shared sshd / sysctl / docker daemon config
 ├── docker/<host>/<stack>/      # One Docker Compose stack per directory
 │   ├── docker-compose.yml
@@ -47,6 +46,7 @@ Infrastructure-as-code for a three-machine homelab running [uCore](https://githu
 │   ├── config/                 #   committed config files
 │   ├── scripts/                #   stack-specific scripts
 │   └── appdata/                #   container data (git-ignored)
+├── cloud/                      # Ubuntu cloud-init and bootstrap for powder/watch
 ├── scripts/
 │   ├── gitops-sync.sh          # timer: pull, sync secrets, apply changed stacks + OS configs
 │   ├── sync-secrets.sh         # 1Password → .env
@@ -58,8 +58,8 @@ Infrastructure-as-code for a three-machine homelab running [uCore](https://githu
 │   └── notify.sh               # Discord helper sourced by the others
 ├── docs/
 │   ├── 1password-setup.md      # every 1Password item and field
-│   ├── powder-setup.md         # Oracle Cloud deployment walkthrough
-│   └── hermes-agent-plan.md    # the ops agent on powder
+│   ├── oracle-reprovision.md   # Oracle Cloud rebuild walkthrough
+│   └── legacy/                 # retired Powder CoreOS and Hermes docs
 └── AGENTS.md                   # gotchas for anyone (human or agent) editing this repo
 ```
 
@@ -106,7 +106,7 @@ git push                                     # deploys within 5 minutes
 | rclone cache, music | `/var/mnt/storage` (pancake HDD) | none, rebuildable |
 | Secrets | `.env`, synced from 1Password | 1Password |
 
-Backups land in `/var/mnt/nas/backup/<host>/` on pancake and `/var/backups/homelab/<host>/` on charm and powder. Each host pushes a heartbeat to the `host-backup (<host>)` Uptime Kuma monitor, so a backup that stops running alerts. The charm and powder copies are on the same disk as the data; shipping them off-host is an open item.
+Backups land in `/var/mnt/nas/backup/<host>/` on pancake and `/var/backups/homelab/<host>/` on charm. Each host pushes a heartbeat to the `host-backup (<host>)` Uptime Kuma monitor, so a backup that stops running alerts.
 
 Portainer is a viewer. The repo is the source of truth; anything edited in Portainer is overwritten on the next sync.
 
@@ -120,7 +120,7 @@ Full item list and verification snippet: `docs/1password-setup.md`.
 
 | Layer | Tool | Catches |
 |---|---|---|
-| Reachability | Uptime Kuma on powder (off-site) | host or service down, internet or power outage |
+| Reachability | Uptime Kuma on watch (off-site) | host or service down, internet or power outage |
 | Container health | `container-heartbeat.timer` → Kuma push monitors | background containers with no port, unhealthy healthchecks |
 | Disk | same timer, `disk:` entries | `/var` (and pancake's HDD) at 90% |
 | Backups | `backup-host.sh` → Kuma push monitor | backup silently not running |
@@ -130,11 +130,11 @@ Full item list and verification snippet: `docs/1password-setup.md`.
 
 ## Tailscale services
 
-DockTail publishes any container carrying `docktail.service.*` labels as a Tailscale Service at `https://<name>.<tailnet>.ts.net`. Names in use: plex, sonarr, radarr, prowlarr, bazarr, scrypted, immich, music, homepage, portainer, speedtest (pancake); adguard-backup, mosquitto, portainer-charm (charm); uptime-kuma, hermes, portainer-powder (powder).
+DockTail publishes labelled home containers as Tailscale Services at `https://<name>.<tailnet>.ts.net`. Watch exposes Uptime Kuma through Tailscale Serve.
 
 ## OS management
 
-All hosts run uCore. pancake uses `ucore-minimal:stable-nvidia-lts` for the Maxwell GPU, charm `ucore-minimal:stable`, powder `ucore:stable` on aarch64.
+Pancake uses `ucore-minimal:stable-nvidia-lts` for the Maxwell GPU and charm uses `ucore-minimal:stable`. Powder and watch run Ubuntu and are provisioned from `cloud/`.
 
 ```bash
 rpm-ostree status              # current and previous deployments
@@ -142,6 +142,4 @@ rpm-ostree upgrade && sudo systemctl reboot
 sudo rpm-ostree rollback && sudo systemctl reboot
 ```
 
-powder cannot take OS upgrades or package layering: its 350M `/boot` has no room for a second aarch64 deployment. Run things there in containers. The 1Password CLI is a hand-placed binary in `/usr/local/bin` for the same reason; `scripts/bootstrap.sh` does that.
-
-Fresh install: `cd coreos && ./transpile.sh <host>.bu`, install with the resulting `.ign`, wait for the two uCore rebase reboots, then run `scripts/bootstrap.sh docker/<host>` on the host. powder specifics are in `docs/powder-setup.md`.
+For a fresh uCore install, run `cd coreos && ./transpile.sh <host>.bu`, install the resulting `.ign`, wait for the rebase reboots, then run `scripts/bootstrap.sh docker/<host>`. Oracle hosts use the cloud-init and bootstrap flow in `docs/oracle-reprovision.md`.

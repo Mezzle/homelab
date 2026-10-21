@@ -22,16 +22,22 @@ if "$REPO_DIR/scripts/validate-compose.sh"; then ok "compose"; else fail "compos
 # 2. butane
 if command -v butane >/dev/null; then
   BUTANE=(butane)
-else
+elif docker info >/dev/null 2>&1; then
   BUTANE=(docker run --rm -i -v "$REPO_DIR/coreos:/coreos:ro" -w /coreos quay.io/coreos/butane:release)
+else
+  BUTANE=()
 fi
-for bu in coreos/*.bu; do
-  if (cd coreos && "${BUTANE[@]}" --strict -d . "$(basename "$bu")" > /dev/null); then
-    ok "butane $bu"
-  else
-    fail "butane $bu"
-  fi
-done
+if ((${#BUTANE[@]})); then
+  for bu in coreos/*.bu; do
+    if (cd coreos && "${BUTANE[@]}" --strict -d . "$(basename "$bu")" > /dev/null); then
+      ok "butane $bu"
+    else
+      fail "butane $bu"
+    fi
+  done
+else
+  echo "[validate] WARN: butane unavailable and Docker inaccessible, skipped"
+fi
 
 # 3. manifest
 while read -r src dest mode action; do
@@ -39,17 +45,21 @@ while read -r src dest mode action; do
   [[ -f "coreos/os-configs/$src" ]] || fail "manifest source missing: $src"
   [[ "$dest" == /* ]] || fail "manifest destination not absolute: $src -> $dest"
   [[ "$mode" =~ ^0[0-7]{3}$ ]] || fail "manifest bad mode for $src: $mode"
-  case "${action:-}" in ""|sysctl|docker|sshd|systemd) ;; *) fail "manifest unknown action for $src: $action" ;; esac
+  case "${action:-}" in ""|sysctl|docker|sshd|systemd|operator) ;; *) fail "manifest unknown action for $src: $action" ;; esac
 done < coreos/os-configs/manifest.conf
 while IFS= read -r f; do
   rel="${f#coreos/os-configs/}"
   [[ "$rel" == manifest.conf ]] && continue
+  [[ "$rel" == legacy/* ]] && continue
   grep -qE "^${rel//./\\.}[[:space:]]" coreos/os-configs/manifest.conf || fail "os-configs file not in manifest: $rel"
 done < <(find coreos/os-configs -type f | sort)
 ok "manifest"
 
 # 4. shellcheck
-mapfile -t SCRIPTS < <(git ls-files '*.sh' | grep -v '^\.claude/')
+SCRIPTS=()
+while IFS= read -r script; do
+  [[ -L "$script" ]] || SCRIPTS+=("$script")
+done < <(git ls-files '*.sh' | grep -v '^\.claude/')
 if command -v shellcheck >/dev/null; then
   if shellcheck -S warning "${SCRIPTS[@]}"; then ok "shellcheck"; else fail "shellcheck"; fi
 elif command -v docker >/dev/null; then
@@ -59,7 +69,7 @@ else
 fi
 
 # 5. python
-if python3 -m py_compile docker/powder/monitoring/scripts/*.py; then ok "python"; else fail "python"; fi
+if python3 -m py_compile docker/watch/monitoring/scripts/*.py; then ok "python"; else fail "python"; fi
 
 if [[ $FAILED -ne 0 ]]; then echo "[validate] FAILED"; exit 1; fi
 echo "[validate] all checks passed"

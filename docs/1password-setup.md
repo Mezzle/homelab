@@ -7,7 +7,7 @@ All secrets are in the 1Password vault **Homelab**. Two things read it:
 
 ## Item naming
 
-Stack items are named after the stack path with dots: `docker.pancake.arr`, `docker.charm.home`, `docker.powder.agent`. This is what `sync-secrets.sh` computes from the directory; `op://Homelab/docker.pancake.arr/PIA_USER` is the reference form. Fields are the keys in the stack's `.env.example`. Keys missing from 1Password are left alone in `.env`, so optional values can stay unset.
+Stack items are named after the stack path with dots: `docker.pancake.arr`, `docker.charm.home`. This is what `sync-secrets.sh` computes from the directory; `op://Homelab/docker.pancake.arr/PIA_USER` is the reference form. Fields are the keys in the stack's `.env.example`. Keys missing from 1Password are left alone in `.env`, so optional values can stay unset.
 
 Keep non-secret configuration out of 1Password. A `${VAR:-default}` in the compose file is visible in git; a field in a vault is not.
 
@@ -22,7 +22,7 @@ echo "OP_SERVICE_ACCOUNT_TOKEN=ops_xxxxx" | sudo tee /etc/1password-service-acco
 sudo chmod 600 /etc/1password-service-account.env
 ```
 
-The `op` binary on servers is downloaded by `bootstrap.sh` into `/usr/local/bin`. It must be on systemd's PATH there; `rpm-ostree install` is not an option on powder (full `/boot`).
+The `op` binary on servers is downloaded by `bootstrap.sh` into `/usr/local/bin`, where systemd can find it.
 
 Create the service account at https://my.1password.com → Developer → Service Accounts, with read access to Homelab.
 
@@ -91,7 +91,14 @@ NAS credentials are not here. They are host files, `/etc/nas-arr.credentials` an
 
 No secrets.
 
-### `docker.charm.infra`, `docker.powder.infra`
+### `docker.pancake.sure`
+
+| Field | Notes |
+|---|---|
+| `SECRET_KEY_BASE` | Generate with `openssl rand -hex 64` |
+| `POSTGRES_PASSWORD` | Generate with `openssl rand -hex 24`; keep fixed after database initialization |
+
+### `docker.charm.infra`
 
 | Field | Notes |
 |---|---|
@@ -112,20 +119,9 @@ No secrets.
 | `ADGUARD_PRIMARY_URL`, `ADGUARD_PRIMARY_USER`, `ADGUARD_PRIMARY_PASS` | the Pi |
 | `ADGUARD_REPLICA_USER`, `ADGUARD_REPLICA_PASS` | this instance |
 
-### `docker.powder.monitoring`
+### `docker.watch.monitoring`
 
-| Field | Notes |
-|---|---|
-| `TAILSCALE_IP` | powder's `tailscale ip -4`; published ports bind to it |
-
-### `docker.powder.agent`
-
-| Field | Notes |
-|---|---|
-| `HERMES_DASHBOARD_BASIC_AUTH_USERNAME`, `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` | plaintext, no `$` in the password (compose interpolates `$` in `.env`) |
-| `HERMES_DASHBOARD_BASIC_AUTH_SECRET` | stable session signing key |
-| `TAILNET` | for the dashboard public URL |
-| `TAILSCALE_IP` | powder's `tailscale ip -4` |
+No stack-local secrets. Tailscale Serve publishes its loopback-only port.
 
 ## Verify
 
@@ -150,12 +146,10 @@ check docker.pancake.arr SEEDBOX_HOST SEEDBOX_USER SEEDBOX_PORT SEEDBOX_REMOTE_P
 check docker.pancake.immich DB_PASSWORD IMMICH_TRANSCODING_BACKEND IMMICH_ML_BACKEND IMMICH_ML_IMAGE_SUFFIX
 check docker.pancake.infra TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET TAILNET
 check docker.pancake.speedtest APP_KEY
+check docker.pancake.sure SECRET_KEY_BASE POSTGRES_PASSWORD
 check docker.charm.infra TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET
 check docker.charm.home MQTT_USER MQTT_PASS MYSQL_ROOT_PASSWORD MYSQL_PASSWORD
 check docker.charm.monitoring ADGUARD_PRIMARY_URL ADGUARD_PRIMARY_USER ADGUARD_PRIMARY_PASS ADGUARD_REPLICA_USER ADGUARD_REPLICA_PASS
-check docker.powder.infra TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET
-check docker.powder.monitoring TAILSCALE_IP
-check docker.powder.agent HERMES_DASHBOARD_BASIC_AUTH_USERNAME HERMES_DASHBOARD_BASIC_AUTH_PASSWORD HERMES_DASHBOARD_BASIC_AUTH_SECRET TAILNET TAILSCALE_IP
 ```
 
 ## Notes

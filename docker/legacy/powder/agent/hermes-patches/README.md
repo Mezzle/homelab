@@ -1,4 +1,6 @@
-# Hermes webhook coalescing override
+# Legacy Hermes webhook coalescing override
+
+Powder no longer runs Hermes. This patch remains only to explain the old image.
 
 Temporary source override for Hermes revision `4209d371aa1bb8840ce8447555bdd863a1a96c38`.
 It adds opt-in route settings:

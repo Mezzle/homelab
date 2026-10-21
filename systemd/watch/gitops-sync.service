@@ -1,0 +1,13 @@
+[Unit]
+Description=Pull homelab configuration and apply watch changes
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/srv/.git
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv
+Environment=GITOPS_SERVER_DIR=docker/watch
+ExecStart=/bin/bash /srv/scripts/gitops-sync.sh
+User=mez
+Group=mez

@@ -66,7 +66,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          # Recent AdGuard Home releases can exceed 256 MiB while loading
+          # filters and address data at startup.  Keep enough headroom to
+          # prevent the cgroup OOM-killer from causing a restart loop.
+          memory: 512M
     labels:
       - "docktail.service.enable=true"
       - "docktail.service.name=adguard-backup"

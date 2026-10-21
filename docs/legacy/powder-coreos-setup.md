@@ -1,4 +1,7 @@
-# Powder Setup Guide
+# Legacy powder CoreOS setup
+
+This describes the retired monitoring and Hermes layout. For the current
+Oracle split, use `docs/oracle-reprovision.md`.
 
 Step-by-step instructions for deploying powder (Oracle Cloud Always Free — Ampere A1).
 

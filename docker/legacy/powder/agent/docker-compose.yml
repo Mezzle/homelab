@@ -9,7 +9,7 @@
 # There is no public ingress — the tailnet is the only way in, and the
 # dashboard's own basic-auth gate sits behind that.
 #
-# See docs/hermes-agent-plan.md for the phased trust model.
+# Retired configuration retained for migration history only.
 #
 # Required:
 #   - DockTail running on this Docker host (see docker/powder/infra)

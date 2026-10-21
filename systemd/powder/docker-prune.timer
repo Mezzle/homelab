@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Docker cleanup weekly
+
+[Timer]
+OnCalendar=Sun 05:30
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

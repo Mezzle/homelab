@@ -35,6 +35,8 @@ passwd:
         - docker
         - wheel
       shell: /bin/bash
+    - name: homelab-operator
+      shell: /bin/bash
 
 storage:
   directories:

@@ -286,6 +286,7 @@ if [[ -f "$MANIFEST" ]] && echo "$CHANGED_FILES" | grep -q "^coreos/os-configs/"
   [[ -n "${RELOAD_ACTIONS[sysctl]:-}" ]]  && reload sysctl sudo sysctl --system --quiet
   [[ -n "${RELOAD_ACTIONS[docker]:-}" ]]  && reload docker sudo systemctl reload docker
   [[ -n "${RELOAD_ACTIONS[sshd]:-}" ]]    && reload sshd sudo systemctl reload sshd
+  [[ -n "${RELOAD_ACTIONS[operator]:-}" ]] && reload operator sudo /usr/local/sbin/homelab-operator-install.sh
   if [[ -n "${RELOAD_ACTIONS[systemd]:-}" ]]; then
     reload systemd sudo systemctl daemon-reload
     # A changed timer only picks up a new schedule when restarted. Services
