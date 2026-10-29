@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-STACKS=(arr immich music speedtest sure infra)
+STACKS=(arr immich music speedtest sure mealie infra)
 
 case "${1:-help}" in
   up-all)

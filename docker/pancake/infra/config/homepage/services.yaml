@@ -74,6 +74,11 @@
         href: https://sure.{{HOMEPAGE_VAR_TAILNET}}.ts.net
         description: Personal finance
 
+    - Mealie:
+        icon: mealie.svg
+        href: https://mealie.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+        description: Recipes and meal planning
+
 - Infrastructure:
     - Portainer (Pancake):
         icon: portainer.svg

@@ -1,0 +1,122 @@
+##############################################################################
+# Mealie — self-hosted recipe manager and meal planner (https://mealie.io)
+#
+# Exposed publicly with Tailscale Funnel at https://mealie.corgi-justice.ts.net
+# so people off the tailnet can use it. That URL works on the tailnet too.
+# Funnel only works on a node's own name, not a Tailscale Service, so the
+# ts-mealie sidecar joins the tailnet as its own node (tag:funnel) and Mealie
+# shares its network namespace. The ACL must grant tag:funnel the "funnel"
+# node attribute.
+#
+# SQLite in a named volume (mealie_data). Mealie no longer backs itself up,
+# so the backup container snapshots it to the NAS daily.
+#
+# Sign-up is disabled; users join via invite links.
+#
+# Required:
+#   - Copy .env.example to .env and fill in your values
+##############################################################################
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-security-opts: &security-opts
+  security_opt:
+    - no-new-privileges:true
+
+networks:
+  mealie:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-mealie
+
+volumes:
+  data:
+  ts-state:
+
+services:
+  ##########################################################################
+  # Tailscale sidecar — the mealie node, serving Mealie over Funnel
+  ##########################################################################
+  ts-mealie:
+    image: tailscale/tailscale:latest
+    container_name: ts-mealie
+    hostname: mealie
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - mealie
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_EXTRA_ARGS: --advertise-tags=tag:funnel
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ts-state:/var/lib/tailscale
+      - ./config/tailscale/serve.json:/config/serve.json:ro,z
+    logging: *default-logging
+
+  ##########################################################################
+  # Mealie
+  ##########################################################################
+  mealie:
+    image: ghcr.io/mealie-recipes/mealie:latest
+    container_name: mealie
+    restart: unless-stopped
+    <<: *security-opts
+    network_mode: service:ts-mealie
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    environment:
+      TZ: Europe/London
+      BASE_URL: https://mealie.corgi-justice.ts.net
+      ALLOW_SIGNUP: "false"
+    volumes:
+      - data:/app/data
+    depends_on:
+      - ts-mealie
+    logging: *default-logging
+
+  ##########################################################################
+  # Backup — SQLite snapshot + assets to the NAS on start and then every 24h
+  #
+  # Manual run: ./stack.sh backup
+  ##########################################################################
+  backup:
+    image: alpine:3.21
+    container_name: mealie-backup
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - mealie
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    environment:
+      TZ: Europe/London
+      BACKUP_RETENTION_DAYS: 14
+    volumes:
+      - data:/data:ro
+      - ./scripts/backup.sh:/backup.sh:ro,z
+      - /var/mnt/nas/backup:/nas:rslave
+    entrypoint: /bin/sh
+    command: ["-c", "apk add --no-cache sqlite bash tzdata && while true; do /bin/bash /backup.sh || true; sleep 86400; done"]
+    # Unhealthy when the newest backup is over 26h old, which container-heartbeat
+    # reports to Uptime Kuma as down.
+    healthcheck:
+      test: ["CMD-SHELL", "find /nas/backups/mealie -name 'mealie-*.tar.gz' -mmin -1560 | grep -q ."]
+      interval: 5m
+      timeout: 30s
+      retries: 2
+      start_period: 2m
+    logging: *default-logging

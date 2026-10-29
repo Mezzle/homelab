@@ -189,6 +189,19 @@ op item get "pancake/sure" --vault Homelab --fields label=SECRET_KEY_BASE,label=
 
 ---
 
+### `pancake/mealie` — Mealie recipes
+
+| Field | Example value | Notes |
+|---|---|---|
+| `TS_AUTHKEY` | `tskey-auth-...` | Joins the `ts-mealie` node as `tag:funnel`. A non-ephemeral pre-auth key with that tag, or an OAuth client secret (`auth_keys` write, owns `tag:funnel`) suffixed `?ephemeral=false`. Only needed for the first join. |
+
+```bash
+# Verify
+op item get "pancake/mealie" --vault Homelab --fields label=TS_AUTHKEY
+```
+
+---
+
 ### `charm/infra` — Portainer agent + DockTail
 
 | Field | Example value | Notes |
@@ -301,6 +314,7 @@ check "pancake/immich" IMMICH_VERSION NAS_HOST NAS_PHOTOS_SHARE NAS_PHOTOS_USER 
 
 check "pancake/speedtest" APP_KEY
 check "pancake/sure" SECRET_KEY_BASE POSTGRES_PASSWORD
+check "pancake/mealie" TS_AUTHKEY
 check "pancake/infra" TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET TAILNET \
   SONARR_API_KEY RADARR_API_KEY PROWLARR_API_KEY PLEX_TOKEN IMMICH_API_KEY ADGUARD_USER ADGUARD_PASS
 check "charm/infra" TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET
