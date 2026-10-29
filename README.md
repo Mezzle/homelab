@@ -323,7 +323,7 @@ After deployment, all services are accessible via Tailscale with automatic HTTPS
 | Portainer | `https://portainer.<tailnet>.ts.net` |
 | Speedtest Tracker | `https://speedtest.<tailnet>.ts.net` |
 | Sure | `https://sure.<tailnet>.ts.net` |
-| Mealie | `https://pancake.<tailnet>.ts.net` (public, via Funnel) |
+| Mealie | `https://mealie.<tailnet>.ts.net` (public, via Funnel on its own `ts-mealie` node) |
 | Scrypted | `https://scrypted.<tailnet>.ts.net` |
 
 ### charm (mac mini)

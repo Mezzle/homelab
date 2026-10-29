@@ -76,7 +76,7 @@
 
     - Mealie:
         icon: mealie.svg
-        href: https://pancake.{{HOMEPAGE_VAR_TAILNET}}.ts.net
+        href: https://mealie.{{HOMEPAGE_VAR_TAILNET}}.ts.net
         description: Recipes and meal planning
 
 - Infrastructure:

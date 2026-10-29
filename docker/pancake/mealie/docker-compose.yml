@@ -1,15 +1,20 @@
 ##############################################################################
 # Mealie — self-hosted recipe manager and meal planner (https://mealie.io)
 #
-# Exposed publicly with Tailscale Funnel at https://pancake.corgi-justice.ts.net
+# Exposed publicly with Tailscale Funnel at https://mealie.corgi-justice.ts.net
 # so people off the tailnet can use it. That URL works on the tailnet too.
-# Funnel needs the "funnel" node attribute granted to tag:server in the
-# Tailscale ACL.
+# Funnel only works on a node's own name, not a Tailscale Service, so the
+# ts-mealie sidecar joins the tailnet as its own node (tag:funnel) and Mealie
+# shares its network namespace. The ACL must grant tag:funnel the "funnel"
+# node attribute.
 #
 # SQLite in a named volume (mealie_data). Mealie no longer backs itself up,
 # so the backup container snapshots it to the NAS daily.
 #
-# No secrets: sign-up is disabled, and users join via invite links.
+# Sign-up is disabled; users join via invite links.
+#
+# Required:
+#   - Copy .env.example to .env and fill in your values
 ##############################################################################
 
 x-logging: &default-logging
@@ -30,8 +35,34 @@ networks:
 
 volumes:
   data:
+  ts-state:
 
 services:
+  ##########################################################################
+  # Tailscale sidecar — the mealie node, serving Mealie over Funnel
+  ##########################################################################
+  ts-mealie:
+    image: tailscale/tailscale:latest
+    container_name: ts-mealie
+    hostname: mealie
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - mealie
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_EXTRA_ARGS: --advertise-tags=tag:funnel
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ts-state:/var/lib/tailscale
+      - ./config/tailscale/serve.json:/config/serve.json:ro,z
+    logging: *default-logging
+
   ##########################################################################
   # Mealie
   ##########################################################################
@@ -40,22 +71,19 @@ services:
     container_name: mealie
     restart: unless-stopped
     <<: *security-opts
-    networks:
-      - mealie
+    network_mode: service:ts-mealie
     deploy:
       resources:
         limits:
           memory: 1G
-    labels:
-      - "docktail.funnel.enable=true"
-      - "docktail.funnel.port=9000"
-      - "docktail.service.network=mealie_mealie"
     environment:
       TZ: Europe/London
-      BASE_URL: https://pancake.corgi-justice.ts.net
+      BASE_URL: https://mealie.corgi-justice.ts.net
       ALLOW_SIGNUP: "false"
     volumes:
       - data:/app/data
+    depends_on:
+      - ts-mealie
     logging: *default-logging
 
   ##########################################################################
