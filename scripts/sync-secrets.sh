@@ -156,4 +156,11 @@ else
   done
 fi
 
+# A failed op read looks the same as a key that isn't in 1Password, so check
+# access again in case the rate limit hit partway through.
+if ! op vault get "$VAULT" --format json >/dev/null 2>&1; then
+  log "ERROR: Lost access to vault '$VAULT' during the sync. Some keys may not have updated."
+  exit 1
+fi
+
 log "Done"
