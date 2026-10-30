@@ -4,7 +4,7 @@
   },
   "Web": {
     "${TS_CERT_DOMAIN}:443": {
-      "Handlers": { "/": { "Proxy": "http://127.0.0.1:9000" } }
+      "Handlers": { "/": { "Proxy": "http://mealie:9000" } }
     }
   },
   "AllowFunnel": {

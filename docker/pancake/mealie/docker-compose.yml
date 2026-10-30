@@ -4,9 +4,10 @@
 # Exposed publicly with Tailscale Funnel at https://mealie.corgi-justice.ts.net
 # so people off the tailnet can use it. That URL works on the tailnet too.
 # Funnel only works on a node's own name, not a Tailscale Service, so the
-# ts-mealie sidecar joins the tailnet as its own node (tag:funnel) and Mealie
-# shares its network namespace. The ACL must grant tag:funnel the "funnel"
-# node attribute.
+# ts-mealie sidecar joins the tailnet as its own node (tag:funnel) and proxies
+# to Mealie over the mealie bridge network, so either container can restart
+# without stranding the other. The ACL must grant tag:funnel the "funnel" node
+# attribute.
 #
 # SQLite in a named volume (mealie_data). Mealie no longer backs itself up,
 # so the backup container snapshots it to the NAS daily.
@@ -44,7 +45,6 @@ services:
   ts-mealie:
     image: tailscale/tailscale:latest
     container_name: ts-mealie
-    hostname: mealie
     restart: unless-stopped
     <<: *security-opts
     networks:
@@ -55,6 +55,12 @@ services:
           memory: 128M
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY}
+      # Without this, every container start logs in again with the key above,
+      # which may be single-use and already spent.
+      TS_AUTH_ONCE: "true"
+      # Not `hostname: mealie`: that puts mealie in this container's /etc/hosts
+      # as itself, and serve.json's proxy target would resolve here.
+      TS_HOSTNAME: mealie
       TS_EXTRA_ARGS: --advertise-tags=tag:funnel
       TS_STATE_DIR: /var/lib/tailscale
       TS_SERVE_CONFIG: /config/serve.json
@@ -71,7 +77,8 @@ services:
     container_name: mealie
     restart: unless-stopped
     <<: *security-opts
-    network_mode: service:ts-mealie
+    networks:
+      - mealie
     deploy:
       resources:
         limits:
@@ -82,8 +89,6 @@ services:
       ALLOW_SIGNUP: "false"
     volumes:
       - data:/app/data
-    depends_on:
-      - ts-mealie
     logging: *default-logging
 
   ##########################################################################
