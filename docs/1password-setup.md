@@ -17,7 +17,8 @@ op signin
 
 # Or set a service account token (servers — non-interactive)
 echo "OP_SERVICE_ACCOUNT_TOKEN=ops_xxxxx" | sudo tee /etc/1password-service-account.env
-sudo chmod 600 /etc/1password-service-account.env
+sudo chown root:mez /etc/1password-service-account.env
+sudo chmod 640 /etc/1password-service-account.env
 ```
 
 Create a Service Account at: https://my.1password.com → Developer → Service Accounts
@@ -31,7 +32,7 @@ Create each item below in the **Homelab** vault. The item name must match exactl
 
 ### `gitops` — Git SSH deploy key
 
-Used by `gitops-sync.sh` to authenticate `git pull` over SSH.
+Fallback for `gitops-sync.sh` when `git fetch` fails with the host's system SSH config. A host with no working system SSH reads this key on every run, which is 288 1Password requests a day.
 
 | Field | Example value | Notes |
 |---|---|---|

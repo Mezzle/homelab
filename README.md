@@ -141,6 +141,8 @@ git add -A && git commit && git push     # Push
 # → gitops-sync picks it up within 5 minutes
 ```
 
+A failed deploy retries every 5 minutes until it succeeds, with one alert per failure. `refs/gitops-sync/applied` in `/srv` records the last commit that fully applied. To redeploy everything changed since an older commit, run `git -C /srv update-ref refs/gitops-sync/applied <sha>`.
+
 ## Adding a new stack
 
 You do NOT need to update Butane configs or systemd units. Just:
@@ -261,7 +263,8 @@ Instead of manually copying `.env` files to each machine, use a **1Password Serv
 ```bash
 # One-time, on each server
 echo "OP_SERVICE_ACCOUNT_TOKEN=ops_xxxxx" | sudo tee /etc/1password-service-account.env
-sudo chmod 600 /etc/1password-service-account.env
+sudo chown root:mez /etc/1password-service-account.env
+sudo chmod 640 /etc/1password-service-account.env
 ```
 
 ### How it works
