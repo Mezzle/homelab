@@ -18,9 +18,9 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
 │  │Scrypted │ │        │ │       │ │      │ │  │  │           │ │          │  │
 │  │ +more   │ │        │ │       │ │      │ │  │  │           │ │          │  │
 │  └─────────┘ └────────┘ └───────┘ └──────┘ │  │  └───────────┘ └──────────┘  │
-│  ┌───────────┐ ┌──────┐ ┌────────┐          │  │                              │
-│  │ speedtest │ │ sure │ │ mealie │          │  │                              │
-│  └───────────┘ └──────┘ └────────┘          │  │                              │
+│  ┌───────────┐ ┌────────┐                   │  │                              │
+│  │ speedtest │ │ mealie │                   │  │                              │
+│  └───────────┘ └────────┘                   │  │                              │
 │                                             │  │                              │
 │  SSD: OS + Docker + appdata                 │  │  SSD: everything (480GB)     │
 │  HDD: media, photos, rclone cache           │  │                              │
@@ -60,7 +60,6 @@ Infrastructure-as-code for a multi-machine homelab running [uCore](https://githu
 │   │   ├── immich/                  #     Photo management
 │   │   ├── music/                   #     Music Assistant
 │   │   ├── speedtest/               #     Speedtest Tracker
-│   │   ├── sure/                    #     Sure personal finance
 │   │   ├── mealie/                  #     Mealie recipes (public via Funnel)
 │   │   └── infra/                   #     Homepage + Portainer + Diun
 │   ├── charm/                 #   Mac Mini stacks
@@ -215,7 +214,6 @@ Current automated backup coverage:
 | Stack | Coverage |
 |---|---|
 | `docker/pancake/arr` | Automated SQLite/config tarball backups to the NAS backup share, with monthly verification. |
-| `docker/pancake/sure` | Daily `pg_dump` to the NAS backup share (`backups/sure`), 14-day retention. Uploaded files in the `sure_app-storage` volume are not backed up. |
 | `docker/pancake/mealie` | Daily SQLite snapshot plus recipe assets to the NAS backup share (`backups/mealie`), 14-day retention. |
 | Other stacks | Not yet automated in this repo. Prioritise Immich Postgres/photos metadata, Home Assistant MySQL, Uptime Kuma, AdGuard, Portainer, Homepage, and Music Assistant state. |
 
@@ -325,7 +323,6 @@ After deployment, all services are accessible via Tailscale with automatic HTTPS
 | Homepage | `https://homepage.<tailnet>.ts.net` |
 | Portainer | `https://portainer.<tailnet>.ts.net` |
 | Speedtest Tracker | `https://speedtest.<tailnet>.ts.net` |
-| Sure | `https://sure.<tailnet>.ts.net` |
 | Mealie | `https://mealie.<tailnet>.ts.net` (public, via Funnel on its own `ts-mealie` node) |
 | Scrypted | `https://scrypted.<tailnet>.ts.net` |
 
