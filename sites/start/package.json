@@ -1,0 +1,8 @@
+{
+  "name": "homelab-start-site",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "check": "test -f public/index.html && test -f public/profiles/tailscale.mobileconfig"
+  }
+}

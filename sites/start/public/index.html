@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>mez.run secure DNS</title>
+    <meta name="description" content="Install the private mez.run DNS profile on your Apple device.">
+    <style>
+      :root { color-scheme: light dark; font: 1rem/1.55 system-ui, sans-serif; }
+      body { max-width: 42rem; margin: 3rem auto; padding: 0 1.25rem; }
+      a { color: #1769aa; }
+      .card { border: 1px solid #8885; border-radius: .75rem; padding: 1rem 1.25rem; margin: 1rem 0; }
+      code { overflow-wrap: anywhere; }
+    </style>
+  </head>
+  <body>
+    <h1>mez.run secure DNS</h1>
+    <p>This page installs the private AdGuard Home DNS-over-HTTPS profile for the <code>corgi-justice</code> Tailscale network.</p>
+    <section class="card">
+      <h2>Apple devices</h2>
+      <p>Install Tailscale first and connect to the tailnet. Then open this link in Safari:</p>
+      <p><a href="/profiles/tailscale.mobileconfig">Install the private DNS profile</a></p>
+      <p>Approve it in Device Management. Remove it there if you no longer want the profile.</p>
+    </section>
+    <section class="card">
+      <h2>Browsers</h2>
+      <p>For a browser custom DoH setting, use:</p>
+      <p><code>https://dns.corgi-justice.ts.net/dns-query</code></p>
+      <p>The browser must be connected to Tailscale. A browser-specific DNS setting can override the system profile.</p>
+    </section>
+  </body>
+</html>
