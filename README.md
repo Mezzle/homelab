@@ -15,7 +15,7 @@ Infrastructure-as-code for a multi-machine homelab using uCore at home and Ubunt
 │  immich     Photos, ML (GPU), Postgres      │  │              Portainer agent │
 │  music      Music Assistant                 │  │                              │
 │  speedtest  Speedtest Tracker               │  └──────────────────────────────┘
-│  sure       Personal finance                │
+│  mealie     Recipes (public via Funnel)     │
 │  infra      DockTail, Portainer, Homepage,  │
 │             Diun                            │  ┌──────────────────────────────┐
 │                                             │  │  watch (Oracle Cloud E2)     │
@@ -67,7 +67,9 @@ Infrastructure-as-code for a multi-machine homelab using uCore at home and Ubunt
 
 1. Push to `main`.
 2. Every host runs `gitops-sync.timer` every 5 minutes. It pulls, syncs `.env` files from 1Password, runs `docker compose up -d` for any stack whose directory changed, and installs any changed file listed in `coreos/os-configs/manifest.conf` (with the matching reload).
-3. Failures post to Discord once per failure streak, and once more on recovery.
+3. A failed deploy retries every 5 minutes until it succeeds. Failures post to Discord once per distinct failure, and once more on recovery.
+
+`refs/gitops-sync/applied` in `/srv` records the last commit that fully applied, and each run deploys everything changed since then. To redeploy everything changed since an older commit, run `git -C /srv update-ref refs/gitops-sync/applied <sha>`.
 
 Butane configs only run on first boot. Anything a host might need updated later lives in `coreos/os-configs/` and is referenced from the `.bu` files with `local:` / `contents_local:`, so a fresh install and gitops-sync install the same bytes. `scripts/gitops-sync.sh --apply-os-configs` installs every manifest entry regardless of what changed; use it on a host that predates a unit.
 
@@ -101,7 +103,7 @@ git push                                     # deploys within 5 minutes
 
 | Data | Where | Backup |
 |---|---|---|
-| App config and databases | `./appdata/` on the SSD | `backup.timer` nightly (all stacks); arr has its own sqlite-safe container |
+| App config and databases | `./appdata/` on the SSD | `backup.timer` nightly (all stacks); arr and mealie have their own sqlite-safe containers |
 | Media, photos | NAS over CIFS, mounted by systemd on pancake | NAS |
 | rclone cache, music | `/var/mnt/storage` (pancake HDD) | none, rebuildable |
 | Secrets | `.env`, synced from 1Password | 1Password |
@@ -126,11 +128,11 @@ Full item list and verification snippet: `docs/1password-setup.md`.
 | Backups | `backup-host.sh` → Kuma push monitor | backup silently not running |
 | Stale NAS mounts | `nas-mount-check.timer` on pancake | CIFS ESTALE while systemd still says mounted |
 | Image updates | Diun | new tags, daily |
-| Sync failures | `gitops-sync.sh` ERR trap → Discord | pull can't fast-forward, missing `op`, bad manifest |
+| Sync failures | `gitops-sync.sh` EXIT trap → Discord | pull can't fast-forward, fetch failing, failed stack, secret sync, OS file or reload |
 
 ## Tailscale services
 
-DockTail publishes labelled home containers as Tailscale Services at `https://<name>.<tailnet>.ts.net`. Watch exposes Uptime Kuma through Tailscale Serve.
+DockTail publishes labelled home containers as Tailscale Services at `https://<name>.<tailnet>.ts.net`. Mealie is the exception: it runs its own `ts-mealie` node and is public through Funnel. Watch exposes Uptime Kuma through Tailscale Serve.
 
 ## OS management
 

@@ -19,7 +19,8 @@ op signin
 
 # servers: a service account token, installed by scripts/bootstrap.sh into
 echo "OP_SERVICE_ACCOUNT_TOKEN=ops_xxxxx" | sudo tee /etc/1password-service-account.env
-sudo chmod 600 /etc/1password-service-account.env
+sudo chown root:mez /etc/1password-service-account.env
+sudo chmod 640 /etc/1password-service-account.env
 ```
 
 The `op` binary on servers is downloaded by `bootstrap.sh` into `/usr/local/bin`, where systemd can find it.
@@ -32,7 +33,7 @@ Create the service account at https://my.1password.com → Developer → Service
 
 | Field | Notes |
 |---|---|
-| `SSH_DEPLOY_KEY` | private half of a read-only GitHub deploy key, used by `gitops-sync.sh` for `git pull` |
+| `SSH_DEPLOY_KEY` | private half of a read-only GitHub deploy key, fallback for `gitops-sync.sh` when `git fetch` fails with the host's system SSH config. A host with no working system SSH reads this key on every run, 288 1Password requests a day |
 
 ```bash
 ssh-keygen -t ed25519 -f /tmp/gitops-deploy -N "" -C "gitops-deploy-key"
@@ -91,12 +92,11 @@ NAS credentials are not here. They are host files, `/etc/nas-arr.credentials` an
 
 No secrets.
 
-### `docker.pancake.sure`
+### `docker.pancake.mealie`
 
 | Field | Notes |
 |---|---|
-| `SECRET_KEY_BASE` | Generate with `openssl rand -hex 64` |
-| `POSTGRES_PASSWORD` | Generate with `openssl rand -hex 24`; keep fixed after database initialization |
+| `TS_AUTHKEY` | joins the `ts-mealie` node as `tag:funnel`. A non-ephemeral pre-auth key with that tag, or an OAuth client secret (`auth_keys` write, owns `tag:funnel`) suffixed `?ephemeral=false`. Only needed for the first join |
 
 ### `docker.charm.infra`
 
@@ -146,7 +146,7 @@ check docker.pancake.arr SEEDBOX_HOST SEEDBOX_USER SEEDBOX_PORT SEEDBOX_REMOTE_P
 check docker.pancake.immich DB_PASSWORD IMMICH_TRANSCODING_BACKEND IMMICH_ML_BACKEND IMMICH_ML_IMAGE_SUFFIX
 check docker.pancake.infra TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET TAILNET
 check docker.pancake.speedtest APP_KEY
-check docker.pancake.sure SECRET_KEY_BASE POSTGRES_PASSWORD
+check docker.pancake.mealie TS_AUTHKEY
 check docker.charm.infra TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET
 check docker.charm.home MQTT_USER MQTT_PASS MYSQL_ROOT_PASSWORD MYSQL_PASSWORD
 check docker.charm.monitoring ADGUARD_PRIMARY_URL ADGUARD_PRIMARY_USER ADGUARD_PRIMARY_PASS ADGUARD_REPLICA_USER ADGUARD_REPLICA_PASS

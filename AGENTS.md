@@ -26,7 +26,7 @@ Butane files under `coreos/` only run at install. Editing a `.bu` changes nothin
 - **Immich** server, ML and database versions move together. `IMMICH_VERSION` is pinned in the compose file; bump it there.
 - **Uptime Kuma** is pinned to 1.x. The seed scripts use its Socket.IO API, which 2.x changes.
 - **Stack units** are `stack@<name>.service`: `compose up -d` on start, `compose stop` on stop, never pull, never `down`. Dependencies on mounts and on other stacks are drop-ins in `coreos/os-configs/<host>/`. Don't put `compose down` back in a unit; it removes networks other stacks join.
-- **New systemd units** installed via the manifest still need `systemctl enable --now` once on each existing host. The manifest reloads; it doesn't enable. gitops-sync only installs files that changed in the pull it just did; `gitops-sync.sh --apply-os-configs` installs everything.
+- **New systemd units** installed via the manifest still need `systemctl enable --now` once on each existing host. The manifest reloads; it doesn't enable. gitops-sync only installs files that changed since the last applied commit (`refs/gitops-sync/applied`); `gitops-sync.sh --apply-os-configs` installs everything.
 - **Host-side git commits** (there is a `pancake` remote) make the next `--ff-only` pull fail. gitops-sync now notifies on that, but the fix is to push from the laptop.
 
 ## Conventions
