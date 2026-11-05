@@ -1,10 +1,11 @@
 [Unit]
-Description=Push per-container health to Uptime Kuma
+Description=Push per-container health and disk usage to Uptime Kuma
 After=docker.service
 Wants=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/srv/scripts/container-heartbeat.sh
-# Keep going even if one host's Kuma is briefly unreachable; the timer retries.
+# /bin/bash prefix: SELinux blocks direct exec of files under /srv (203/EXEC).
+ExecStart=/bin/bash /srv/scripts/container-heartbeat.sh
+# Keep going even if Kuma is briefly unreachable; the timer retries.
 TimeoutStartSec=60

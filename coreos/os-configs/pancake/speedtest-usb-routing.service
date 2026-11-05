@@ -1,0 +1,15 @@
+# Marks packets entering from the speedtest and arr Docker bridges and
+# routes them via the 2.5Gb USB NIC. Docker restarts flush the mangle
+# rules, so the timer re-applies them; the script is idempotent.
+[Unit]
+Description=Route speedtest Docker bridge traffic via USB NIC (enp0s20u5)
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+ExecStart=/usr/local/sbin/speedtest-usb-routing.sh
+
+[Install]
+WantedBy=multi-user.target

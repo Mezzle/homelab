@@ -26,6 +26,10 @@ x-healthcheck-defaults: &healthcheck-defaults
 networks:
   infra:
     driver: bridge
+  # Isolated network for the Docker socket proxy — only autoheal can reach it
+  socket-proxy:
+    driver: bridge
+    internal: true
 
 services:
   ##########################################################################
@@ -88,29 +92,74 @@ services:
     logging: *default-logging
 
   ##########################################################################
+  # Docker socket proxy — limits what autoheal can do with the socket
+  ##########################################################################
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: socket-proxy
+    restart: unless-stopped
+    # The socket must bypass the /run tmpfs (Alpine /var/run -> /run symlink
+    # shadowed it) and SELinux labeling (socket is container_var_run_t).
+    security_opt:
+      - label=disable
+    networks:
+      - socket-proxy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    environment:
+      # Only grant the minimum permissions autoheal needs
+      CONTAINERS: 1
+      POST: 1
+      IMAGES: 0
+      NETWORKS: 0
+      VOLUMES: 0
+      EXEC: 0
+      SWARM: 0
+      NODES: 0
+      SERVICES: 0
+      TASKS: 0
+      SECRETS: 0
+      CONFIGS: 0
+      SOCKET_PATH: /docker.sock
+    volumes:
+      - /var/run/docker.sock:/docker.sock:ro
+    logging: *default-logging
+
+  ##########################################################################
   # Autoheal — restart containers that go unhealthy
   #
   # Watches every container with a healthcheck; restarts any that turns
   # unhealthy (e.g. portainer-agent's API self-shutdown after 72h idle).
-  # Same pattern as pancake's arr stack.
+  # Talks to Docker through socket-proxy, same as pancake's arr stack.
   ##########################################################################
   autoheal:
     image: willfarrell/autoheal:latest
     container_name: autoheal
     restart: unless-stopped
     security_opt:
-      - label=disable
-    environment:
-      <<: *common-env
-      DOCKER_SOCK: /var/run/docker.sock
-      AUTOHEAL_CONTAINER_LABEL: all
-      AUTOHEAL_INTERVAL: 60
-      AUTOHEAL_START_PERIOD: 120
-      AUTOHEAL_DEFAULT_STOP_TIMEOUT: 10
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - no-new-privileges:true
+    networks:
+      - socket-proxy
+    depends_on:
+      - socket-proxy
     deploy:
       resources:
         limits:
           memory: 64M
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      <<: *common-env
+      DOCKER_SOCK: tcp://socket-proxy:2375
+      AUTOHEAL_CONTAINER_LABEL: all
+      AUTOHEAL_INTERVAL: 60
+      AUTOHEAL_START_PERIOD: 120
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: 10
     logging: *default-logging

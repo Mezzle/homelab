@@ -37,7 +37,9 @@ services:
   # would miss.
   ##########################################################################
   uptime-kuma:
-    image: louislam/uptime-kuma:latest
+    # Pinned to 1.x: 2.x changes the database and the Socket.IO API used by
+    # the seed and monitor-management scripts. Upgrade deliberately.
+    image: louislam/uptime-kuma:1
     container_name: uptime-kuma
     restart: unless-stopped
     networks:

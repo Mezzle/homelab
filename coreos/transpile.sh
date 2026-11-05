@@ -6,6 +6,9 @@
 # running butane. The .bu files stay publishable with CHANGEME placeholders;
 # real values only appear in the generated .ign files (which are gitignored).
 #
+# The .bu files reference coreos/os-configs/ with `local:` / `contents_local:`,
+# so butane runs with this directory as its files-dir (-d).
+#
 # Usage:
 #   ./transpile.sh                          # transpile all .bu files
 #   ./transpile.sh pancake.bu               # transpile a specific file
@@ -94,8 +97,8 @@ transpile() {
     apply_secrets "$src" | butane --pretty --strict -d . > "$dest"
   else
     echo "  butane not found locally, using Docker..."
-    apply_secrets "$src" | docker run --rm -i quay.io/coreos/butane:release \
-      --pretty --strict > "$dest"
+    apply_secrets "$src" | docker run --rm -i -v "$SCRIPT_DIR:/coreos:ro" quay.io/coreos/butane:release \
+      --pretty --strict -d /coreos > "$dest"
   fi
 
   echo "  ✓ $(wc -c < "$dest" | tr -d ' ') bytes written"

@@ -2,19 +2,23 @@
 ###############################################################################
 # gitops-sync.sh — Pull from git and apply changes automatically
 #
-# Called by the gitops-sync.timer systemd unit every 5 minutes.
-# Requires GITOPS_SERVER_DIR to be set (in the systemd unit) to identify
-# which server's stacks to manage.
+# Called by gitops-sync.timer every 5 minutes. GITOPS_SERVER_DIR (set in the
+# unit, docker/<hostname>) selects which server's stacks to manage.
 #
 # What it does:
 #   1. git pull the repo
 #   2. Sync secrets from 1Password → .env files
 #   3. For each stack changed since the last applied commit → docker compose up -d
-#   4. If OS config files changed → apply + reload
-#   5. Logs everything to journald
+#   4. If OS config files changed → install + reload (coreos/os-configs/manifest.conf)
+#   5. Notify Discord once per distinct failure, and once on recovery
 #
 # The last fully applied commit is kept in refs/gitops-sync/applied and only
 # advances when every step succeeded, so a failed run retries on the next tick.
+#
+# gitops-sync.sh --apply-os-configs
+#   Skip the pull and treat every manifest entry as changed. For a host that
+#   predates a unit or when the manifest itself was restructured; bootstrap.sh
+#   runs it on a fresh host. Enabling new units is still a manual step.
 ###############################################################################
 set -euo pipefail
 
@@ -28,8 +32,12 @@ OP_ITEM="gitops"
 log() { echo "[gitops-sync] $*"; }
 indent() { sed 's/^/  /'; }
 
+APPLY_ALL=0
+[[ "${1:-}" == "--apply-os-configs" ]] && APPLY_ALL=1
+
 # Load Discord notification helper if available
 if [[ -f "$SCRIPT_DIR/notify.sh" ]]; then
+  # shellcheck disable=SC1091
   source "$SCRIPT_DIR/notify.sh"
 else
   notify() { :; }  # no-op if helper not available
@@ -52,7 +60,7 @@ fi
 ###############################################################################
 # Runs repeat every 5 minutes, so notify once per distinct failure. Any other
 # non-zero exit, such as a set -e abort or a config error, gets a generic alert
-# from the EXIT trap. A successful run clears the marker.
+# from the EXIT trap. A successful sync clears the marker and says it recovered.
 FAILURE_MARKER="/tmp/gitops-sync.failed"
 FAILURE_REPORTED=0
 SSH_KEY_FILE=""
@@ -71,7 +79,11 @@ on_exit() {
   local status=$?
   [[ -n "$SSH_KEY_FILE" ]] && rm -f "$SSH_KEY_FILE"
   if [[ "$status" -eq 0 ]]; then
-    rm -f "$FAILURE_MARKER"
+    # --apply-os-configs skips the deploy, so it can't vouch for one.
+    if [[ "$APPLY_ALL" -eq 0 && -f "$FAILURE_MARKER" ]]; then
+      rm -f "$FAILURE_MARKER"
+      notify success "GitOps sync recovered" "Sync completed normally again"
+    fi
   elif [[ "$FAILURE_REPORTED" -eq 0 ]]; then
     notify_failure "unexpected" "GitOps sync failed" "gitops-sync.sh exited $status. Check: journalctl -u gitops-sync.service"
   fi
@@ -88,19 +100,15 @@ fi
 ###############################################################################
 # Determine which server this is
 ###############################################################################
-# Every host must set GITOPS_SERVER_DIR in its gitops-sync.service unit.
-if [[ -z "${GITOPS_SERVER_DIR:-}" ]]; then
-  log "ERROR: GITOPS_SERVER_DIR is not set. Configure it in the gitops-sync.service systemd unit."
-  exit 1
-fi
-SERVER_DIR="$GITOPS_SERVER_DIR"
+HOSTNAME=$(hostname -s)
+SERVER_DIR="${GITOPS_SERVER_DIR:-docker/$HOSTNAME}"
 
 if [[ ! -d "$REPO_DIR/$SERVER_DIR" ]]; then
   log "ERROR: Server directory $REPO_DIR/$SERVER_DIR does not exist"
   exit 1
 fi
 
-log "Server: $SERVER_DIR (host: $(hostname -s))"
+log "Server: $SERVER_DIR (host: $HOSTNAME)"
 
 ###############################################################################
 # SSH identity from 1Password
@@ -115,6 +123,7 @@ setup_git_ssh() {
       log "ERROR: $TOKEN_FILE has unexpected format"
       return 1
     fi
+    # shellcheck disable=SC1090
     source "$TOKEN_FILE"
     export OP_SERVICE_ACCOUNT_TOKEN
   elif [[ -z "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
@@ -140,6 +149,15 @@ setup_git_ssh() {
   export GIT_SSH_COMMAND="ssh -i $SSH_KEY_FILE -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
   log "Using SSH deploy key from 1Password"
 }
+
+FAILED_STACKS=()
+SECRETS_FAILED=0
+if [[ $APPLY_ALL -eq 1 ]]; then
+  APPLIED=$(git rev-parse HEAD)
+  AFTER=$APPLIED
+  CHANGED_FILES=$(git ls-files coreos/os-configs)
+  log "Applying every OS config in the manifest (--apply-os-configs)"
+else
 
 ###############################################################################
 # Step 1: Pull changes
@@ -212,7 +230,6 @@ indent <<< "$CHANGED_FILES"
 # A retry for a failed stack must not re-read every key from 1Password every 5
 # minutes, so remember the commit the secrets last synced for.
 SECRETS_REF="refs/gitops-sync/secrets-synced"
-SECRETS_FAILED=0
 if [[ -f "$SCRIPT_DIR/sync-secrets.sh" ]]; then
   if [[ "$(git rev-parse --quiet --verify "$SECRETS_REF" || true)" == "$AFTER" ]]; then
     log "Secrets already synced for $AFTER"
@@ -256,7 +273,6 @@ missing_env_keys() {
   done < <(sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$stack_dir/.env.example")
 }
 
-FAILED_STACKS=()
 for stack_dir in "${STACKS_TO_UPDATE[@]}"; do
   stack_name=$(basename "$stack_dir")
 
@@ -294,14 +310,15 @@ if [[ ${#STACKS_TO_UPDATE[@]} -eq 0 ]]; then
   log "No stack changes for $SERVER_DIR"
 fi
 
+fi  # APPLY_ALL
+
 ###############################################################################
 # Step 4: Apply OS config changes
 #
-# Reads coreos/os-configs/manifest.conf for file mappings.
-# Shared files (no directory prefix) apply to all servers.
-# Per-server files (e.g. pancake/motd.sh) apply only to that host.
+# Reads coreos/os-configs/manifest.conf for file mappings. Scope is the
+# first path component of the source: none or common/ applies everywhere,
+# <hostname>/ applies only to that host.
 ###############################################################################
-HOSTNAME=$(hostname -s)
 MANIFEST="$REPO_DIR/coreos/os-configs/manifest.conf"
 OS_CONFIGS_DIR="$REPO_DIR/coreos/os-configs"
 # A file installed by a run whose reload failed compares as unchanged on the
@@ -314,7 +331,7 @@ FAILED_RELOADS=()
 # Returns 0 if installed, 1 if there was nothing to do, 2 if the install failed.
 apply_os_file() {
   local src="$1" dest="$2" mode="${3:-0644}"
-  [[ -f "$src" ]] || return 1
+  [[ -f "$src" ]] || { log "WARNING: manifest source missing: $src"; return 1; }
   if [[ -f "$dest" ]] && diff -q "$src" "$dest" >/dev/null 2>&1; then
     return 1
   fi
@@ -345,14 +362,19 @@ if [[ -f "$MANIFEST" ]] && grep -q "^coreos/os-configs/" <<< "$CHANGED_FILES"; t
     # Skip comments and blank lines
     [[ -z "$src" || "$src" == \#* ]] && continue
 
-    # Per-server files: only apply if the prefix matches this hostname
-    src_dir=$(dirname "$src")
-    if [[ "$src_dir" != "." ]]; then
-      [[ "$src_dir" != "$HOSTNAME" ]] && continue
+    if [[ "$src" == */* ]]; then
+      scope="${src%%/*}"
+      # common/ is Fedora CoreOS only. The Ubuntu hosts have their own
+      # gitops-sync unit (systemd/<host>/) and no wheel group.
+      if [[ "$scope" == "common" ]]; then
+        [[ -e /run/ostree-booted ]] || continue
+      elif [[ "$scope" != "$HOSTNAME" ]]; then
+        continue
+      fi
     fi
 
     # Only process files that actually changed
-    if ! grep -q "^coreos/os-configs/$src$" <<< "$CHANGED_FILES"; then
+    if ! grep -qx "coreos/os-configs/$src" <<< "$CHANGED_FILES"; then
       continue
     fi
 
@@ -360,6 +382,7 @@ if [[ -f "$MANIFEST" ]] && grep -q "^coreos/os-configs/" <<< "$CHANGED_FILES"; t
     apply_os_file "$OS_CONFIGS_DIR/$src" "$dest" "${mode:-0644}" || rc=$?
     if [[ "$rc" -eq 0 ]]; then
       [[ -n "${action:-}" ]] && RELOAD_ACTIONS["$action"]=1
+      [[ "$dest" == *.timer ]] && RELOAD_ACTIONS["restart:$(basename "$dest")"]=1
     elif [[ "$rc" -eq 2 ]]; then
       log "ERROR: Could not install $dest"
       FAILED_OS_FILES+=("$dest")
@@ -371,6 +394,19 @@ if [[ -f "$MANIFEST" ]] && grep -q "^coreos/os-configs/" <<< "$CHANGED_FILES"; t
   run_reload docker sudo systemctl reload docker
   run_reload sshd sudo systemctl reload sshd
   run_reload operator sudo /usr/local/sbin/homelab-operator-install.sh
+  run_reload systemd sudo systemctl daemon-reload
+  # A changed timer only picks up a new schedule when restarted, which has to
+  # wait for a good daemon-reload. Services pick up changes on their next run.
+  # try-restart is a no-op for timers that are not enabled, so new units still
+  # need a one-off enable.
+  for r in "${!RELOAD_ACTIONS[@]}"; do
+    [[ "$r" == restart:* ]] || continue
+    if [[ " ${FAILED_RELOADS[*]} " == *" systemd "* ]]; then
+      FAILED_RELOADS+=("$r")
+    else
+      run_reload "$r" sudo systemctl try-restart "${r#restart:}"
+    fi
+  done
 
   if [[ ${#FAILED_RELOADS[@]} -gt 0 ]]; then
     printf '%s\n' "${FAILED_RELOADS[@]}" > "$PENDING_RELOADS"
@@ -391,6 +427,11 @@ if [[ ${#FAILURES[@]} -gt 0 ]]; then
   log "ERROR: Sync incomplete, will retry: ${FAILURES[*]}"
   notify_failure "deploy $AFTER ${FAILURES[*]}" "GitOps sync failed" "Failed: ${FAILURES[*]}. Retrying every run. Check: journalctl -u gitops-sync.service"
   exit 1
+fi
+
+if [[ $APPLY_ALL -eq 1 ]]; then
+  log "OS configs applied"
+  exit 0
 fi
 
 git update-ref "$APPLIED_REF" "$AFTER"

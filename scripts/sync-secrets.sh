@@ -38,6 +38,7 @@ if [[ -f "$TOKEN_FILE" ]]; then
     log "ERROR: $TOKEN_FILE has unexpected format. Expected: OP_SERVICE_ACCOUNT_TOKEN=<token>"
     exit 1
   fi
+  # shellcheck disable=SC1090
   source "$TOKEN_FILE"
   export OP_SERVICE_ACCOUNT_TOKEN
 elif [[ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
@@ -51,7 +52,7 @@ fi
 # Verify op CLI is available
 if ! command -v op &>/dev/null; then
   log "ERROR: 1Password CLI (op) not found."
-  log "  Install: sudo rpm-ostree install 1password-cli && sudo systemctl reboot"
+  log "  Install: scripts/bootstrap.sh drops the binary into /usr/local/bin"
   exit 1
 fi
 

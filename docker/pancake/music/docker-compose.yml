@@ -58,7 +58,7 @@ services:
       <<: *common-env
     volumes:
       - ./appdata:/data:z
-      - /mnt/storage/media/music:/media/music:ro
+      - /var/mnt/storage/media/music:/media/music:ro
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8095"]

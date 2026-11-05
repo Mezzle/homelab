@@ -1,0 +1,7 @@
+# Zincati — reboot for OS updates only on Sundays 04:00-05:00 UTC.
+[updates]
+strategy = "periodic"
+[[updates.periodic.window]]
+days = [ "Sun" ]
+start_time = "04:00"
+length_minutes = 60

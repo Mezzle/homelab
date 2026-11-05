@@ -132,7 +132,7 @@ The instance will boot and immediately begin the uCore auto-rebase process:
 
 1. **First boot:** Stock Fedora CoreOS starts, rebases to unsigned uCore image, reboots (~3-5 min)
 2. **Second boot:** Rebases to signed uCore image, reboots (~3-5 min)
-3. **Third boot:** uCore is running. Docker, Tailscale, and Cockpit are available.
+3. **Third boot:** uCore is running. Docker and Tailscale are available.
 
 Monitor progress from the OCI Console serial console, or just wait ~10 minutes.
 
@@ -168,39 +168,24 @@ Powder advertises itself as a Tailscale exit node. To use it:
 
 Then on any client device, select powder as your exit node in the Tailscale app.
 
-## Step 4: Clone the repo and sync secrets
+## Step 4: Bootstrap
 
 ```bash
-# SSH in
 ssh mez@powder
-
-# Clone the repo
-cd /srv
-git clone <your-repo-url> .
-
-# Install 1Password CLI (one-time)
-sudo rpm-ostree install 1password-cli
-sudo systemctl reboot
-
-# After reboot, set up the service account token
-ssh mez@powder
-echo "OP_SERVICE_ACCOUNT_TOKEN=ops_xxxxx" | sudo tee /etc/1password-service-account.env
-sudo chown root:mez /etc/1password-service-account.env
-sudo chmod 640 /etc/1password-service-account.env
-
-> **`op` must land in `/usr/local/bin`.** `rpm-ostree install` does not work on
-> powder — /boot has no room for a second deployment (see
-> `docs/hermes-agent-plan.md`), so the binary gets dropped in by hand. Put it in
-> `/usr/local/bin` (a symlink to `/var/usrlocal/bin`, and on systemd's PATH),
-> not `~/.local/bin`: `gitops-sync.service` runs with
-> `PATH=/usr/local/bin:/usr/bin` only, and if it can't find `op` it silently
-> falls back to the system SSH config, fails to authenticate to GitHub, and
-> still exits 0. That failure mode kept powder four months behind `main`.
-
-# Sync secrets for powder's stacks
-./scripts/sync-secrets.sh docker/powder/infra
-./scripts/sync-secrets.sh docker/powder/monitoring
+curl -sL https://raw.githubusercontent.com/Mezzle/homelab/main/scripts/bootstrap.sh \
+  | bash -s -- docker/powder
 ```
+
+The script downloads the 1Password CLI into `/usr/local/bin`, asks for the
+service account token, clones the repo to `/srv`, syncs secrets and starts
+the stacks.
+
+> `op` must land in `/usr/local/bin`. `rpm-ostree install` does not work on
+> powder: /boot has no room for a second deployment. `/usr/local/bin` is on
+> systemd's PATH; `~/.local/bin` is not. If `gitops-sync.service` cannot find
+> `op` it falls back to the system SSH config, cannot authenticate to GitHub,
+> and now notifies Discord instead of failing silently. That silent failure
+> kept powder four months behind `main` once.
 
 ## Step 5: Start the stacks
 
@@ -214,6 +199,8 @@ The systemd units should auto-start the stacks if the compose files exist. If th
 /srv/docker/powder/infra/stack.sh up
 /srv/docker/powder/monitoring/stack.sh up
 /srv/docker/powder/agent/stack.sh up
+
+# On boot they start through stack@<name>.service (see coreos/powder.bu)
 
 # Verify
 docker ps
@@ -255,47 +242,48 @@ TAILNET=<your-tailnet> \
 This creates monitors for all services including keyword/JSON validation,
 MQTT broker checks, DNS resolution tests, and Tailscale ping.
 
-#### Background-container monitors (PUSH)
+#### Push monitors: containers, disks, backups
 
 Containers with no HTTP port to probe (recyclarr, rclone-seedbox, backup,
 speedtest, portainer, docktail on each host) are watched with Uptime Kuma
-**push** monitors instead. A per-host heartbeat script inspects each
-container's docker state/health and pings the matching push monitor only
-while it is up; if a container dies or goes unhealthy the ping stops and Kuma
-flips the monitor Down, firing both the Discord and Hermes-agent
-notifications. A dead heartbeat script (or a dead host) is itself an alert via
-Kuma's "No heartbeat in the time window".
+**push** monitors. `scripts/container-heartbeat.sh` runs on every host from
+`container-heartbeat.timer` each minute, inspects each container's docker
+state and health, and pings the matching push monitor up or down. The same
+run checks disk usage (`disk:` entries, down at 90%), and
+`scripts/backup-host.sh` pings its own monitor after each nightly backup. A
+host that stops pushing trips Kuma's "No heartbeat in the time window".
 
-Create the monitors (idempotent — skips ones that already exist) and print
-their push tokens:
+Create the monitors (idempotent) and print their push tokens:
 
 ```bash
 cd /srv/docker/powder/monitoring
 UPK_USER=.. UPK_PASS=.. ./scripts/.venv/bin/python scripts/add-container-monitors.py
-# or just re-print existing tokens:
-#   ... add-container-monitors.py --tokens
+# re-print existing tokens:  ... add-container-monitors.py --tokens
 ```
 
-Deploy the heartbeat runner to each host (**must live in `/usr/local/sbin`**,
-not `/srv` — SELinux is Enforcing on the CoreOS hosts and only `bin_t`-typed
-paths are execable by systemd; a script under `/srv` gets `var_t` and fails
-with `203/EXEC`):
+The timer units and the scripts deploy through git: `coreos/os-configs/manifest.conf`
+installs `container-heartbeat.{service,timer}` and `backup.{service,timer}`
+on every host. On a host that predates them, enable once:
 
 ```bash
-install -m 755 scripts/container-heartbeat.sh /usr/local/sbin/container-heartbeat.sh
-restorecon -v /usr/local/sbin/container-heartbeat.sh
-cp coreos/os-configs/common/container-heartbeat.{service,timer} /etc/systemd/system/
-systemctl daemon-reload && systemctl enable --now container-heartbeat.timer
+sudo systemctl enable --now container-heartbeat.timer backup.timer
 ```
 
-The token map lives at `/srv/docker/<host>/monitoring/heartbeat-tokens.env`
-(one `container<TAB>pushtoken` per line, mode 600, NOT committed — it holds
-push tokens). The container name is the docker name, which may differ from the
-Kuma monitor name (e.g. `docktail` → the `docktail (pancake)` monitor).
+The token map lives at `/srv/docker/<host>/monitoring/heartbeat-tokens.env`,
+one `<name><TAB><token>` per line, mode 600, NOT committed. `<name>` is a
+docker container name, `disk:<mountpoint>`, or `host-backup`. Watch `/var`, not
+`/`: on Fedora CoreOS `/` is composefs and always reports 100%.
 
-Note: `socket-proxy` (monitor 61) has its own pre-existing
-`socket-proxy-heartbeat.timer` and is deliberately NOT in the container
-heartbeat map — don't add it or it'll be pushed twice.
+```
+recyclarr	abc123
+docktail	def456
+disk:/var	ghi789
+disk:/var/mnt/storage	jkl012
+host-backup	mno345
+```
+
+`socket-proxy` on pancake has its own hand-installed `socket-proxy-heartbeat.timer`
+and is deliberately not in the map.
 
 ### Hermes Agent — first-time setup
 
@@ -343,8 +331,8 @@ docker ps --format "table {{.Names}}\t{{.Status}}"
 # Check Tailscale
 tailscale status
 
-# Check gitops-sync timer is active
-systemctl status gitops-sync.timer
+# Check the timers are active
+systemctl list-timers gitops-sync.timer container-heartbeat.timer backup.timer docker-prune.timer
 
 # Check from your laptop
 curl -s https://uptime-kuma.<tailnet>.ts.net  # Should load
@@ -364,11 +352,8 @@ ssh mez@powder
 /srv/docker/powder/monitoring/stack.sh logs
 /srv/docker/powder/monitoring/stack.sh logs uptime-kuma
 
-# Update OS
-rpm-ostree upgrade && sudo systemctl reboot
-
-# Cockpit web UI
-# https://powder:9090
+# OS updates and package layering do not work on powder: /boot (350M) has
+# no room for a second aarch64 deployment. Do not try.
 
 # Everything else is handled by gitops-sync (pulls git every 5 min)
 ```
@@ -378,7 +363,7 @@ rpm-ostree upgrade && sudo systemctl reboot
 ```
 powder (Oracle Cloud Always Free)
 ├── Ampere A1.Flex — 2 OCPU, 12GB RAM, 100GB disk (aarch64)
-├── uCore (Fedora CoreOS + Docker + Tailscale + Cockpit)
+├── uCore (Fedora CoreOS + Docker + Tailscale)
 ├── Tailscale exit node
 ├── docker/powder/infra/
 │   └── Portainer Agent (managed from pancake)
