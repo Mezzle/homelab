@@ -327,7 +327,6 @@ PENDING_RELOADS="$REPO_DIR/.git/gitops-sync-pending-reloads"
 declare -A RELOAD_ACTIONS
 FAILED_OS_FILES=()
 FAILED_RELOADS=()
-CHANGED_TIMERS=()
 
 # Returns 0 if installed, 1 if there was nothing to do, 2 if the install failed.
 apply_os_file() {
@@ -383,7 +382,7 @@ if [[ -f "$MANIFEST" ]] && grep -q "^coreos/os-configs/" <<< "$CHANGED_FILES"; t
     apply_os_file "$OS_CONFIGS_DIR/$src" "$dest" "${mode:-0644}" || rc=$?
     if [[ "$rc" -eq 0 ]]; then
       [[ -n "${action:-}" ]] && RELOAD_ACTIONS["$action"]=1
-      [[ "$dest" == *.timer ]] && CHANGED_TIMERS+=("$(basename "$dest")")
+      [[ "$dest" == *.timer ]] && RELOAD_ACTIONS["restart:$(basename "$dest")"]=1
     elif [[ "$rc" -eq 2 ]]; then
       log "ERROR: Could not install $dest"
       FAILED_OS_FILES+=("$dest")
@@ -396,12 +395,17 @@ if [[ -f "$MANIFEST" ]] && grep -q "^coreos/os-configs/" <<< "$CHANGED_FILES"; t
   run_reload sshd sudo systemctl reload sshd
   run_reload operator sudo /usr/local/sbin/homelab-operator-install.sh
   run_reload systemd sudo systemctl daemon-reload
-  # A changed timer only picks up a new schedule when restarted. Services
-  # pick up changes on their next run. try-restart is a no-op for timers
-  # that are not enabled, so new units still need a one-off enable.
-  for t in "${CHANGED_TIMERS[@]}"; do
-    log "Restarting $t..."
-    sudo systemctl try-restart "$t" || log "  ERROR: $t restart failed"
+  # A changed timer only picks up a new schedule when restarted, which has to
+  # wait for a good daemon-reload. Services pick up changes on their next run.
+  # try-restart is a no-op for timers that are not enabled, so new units still
+  # need a one-off enable.
+  for r in "${!RELOAD_ACTIONS[@]}"; do
+    [[ "$r" == restart:* ]] || continue
+    if [[ " ${FAILED_RELOADS[*]} " == *" systemd "* ]]; then
+      FAILED_RELOADS+=("$r")
+    else
+      run_reload "$r" sudo systemctl try-restart "${r#restart:}"
+    fi
   done
 
   if [[ ${#FAILED_RELOADS[@]} -gt 0 ]]; then
