@@ -22,7 +22,9 @@
 ###############################################################################
 set -euo pipefail
 
-REPO_DIR="/srv"
+REPO_DIR="${GITOPS_REPO_DIR:-/srv}"
+# Powder deploys only Rex; it has no Docker stacks.
+REX_ONLY="${GITOPS_REX_ONLY:-0}"
 LOCK_FILE="/tmp/gitops-sync.lock"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TOKEN_FILE="/etc/1password-service-account.env"
@@ -103,7 +105,7 @@ fi
 HOSTNAME=$(hostname -s)
 SERVER_DIR="${GITOPS_SERVER_DIR:-docker/$HOSTNAME}"
 
-if [[ ! -d "$REPO_DIR/$SERVER_DIR" ]]; then
+if [[ "$REX_ONLY" != 1 && ! -d "$REPO_DIR/$SERVER_DIR" ]]; then
   log "ERROR: Server directory $REPO_DIR/$SERVER_DIR does not exist"
   exit 1
 fi
@@ -229,6 +231,7 @@ indent <<< "$CHANGED_FILES"
 # env vars added in the pull are populated before docker compose reads them.
 # A retry for a failed stack must not re-read every key from 1Password every 5
 # minutes, so remember the commit the secrets last synced for.
+if [[ "$REX_ONLY" != 1 ]]; then
 SECRETS_REF="refs/gitops-sync/secrets-synced"
 if [[ -f "$SCRIPT_DIR/sync-secrets.sh" ]]; then
   if [[ "$(git rev-parse --quiet --verify "$SECRETS_REF" || true)" == "$AFTER" ]]; then
@@ -310,6 +313,7 @@ if [[ ${#STACKS_TO_UPDATE[@]} -eq 0 ]]; then
   log "No stack changes for $SERVER_DIR"
 fi
 
+fi  # REX_ONLY
 fi  # APPLY_ALL
 
 ###############################################################################
@@ -373,6 +377,11 @@ if [[ -f "$MANIFEST" ]] && grep -q "^coreos/os-configs/" <<< "$CHANGED_FILES"; t
       fi
     fi
 
+    # Powder's dedicated checkout must not deploy other host services.
+    if [[ "$REX_ONLY" == 1 && "${action:-}" != rex && "$src" != powder/rex-sync.* ]]; then
+      continue
+    fi
+
     # Only process files that actually changed
     if ! grep -qx "coreos/os-configs/$src" <<< "$CHANGED_FILES"; then
       continue
@@ -394,6 +403,7 @@ if [[ -f "$MANIFEST" ]] && grep -q "^coreos/os-configs/" <<< "$CHANGED_FILES"; t
   run_reload docker sudo systemctl reload docker
   run_reload sshd sudo systemctl reload sshd
   run_reload operator sudo /usr/local/sbin/homelab-operator-install.sh
+  run_reload rex sudo /usr/local/sbin/rex-install.sh
   run_reload systemd sudo systemctl daemon-reload
   # A changed timer only picks up a new schedule when restarted, which has to
   # wait for a good daemon-reload. Services pick up changes on their next run.

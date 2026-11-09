@@ -1,0 +1,8 @@
+#%PAM-1.0
+# Rex authenticates the caller before invoking PAM.
+auth       required     pam_permit.so
+account    required     pam_nologin.so
+account    include      system-auth
+session    required     pam_loginuid.so
+session    include      system-auth
+session    include      postlogin

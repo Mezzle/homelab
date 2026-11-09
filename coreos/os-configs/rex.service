@@ -1,0 +1,17 @@
+[Unit]
+Description=Rex login server
+Wants=network-online.target
+After=network-online.target tailscaled.service
+Requires=tailscaled.service
+
+[Service]
+User=root
+RuntimeDirectory=rex-mez
+RuntimeDirectoryMode=0700
+ExecStart=/usr/local/bin/rex login-server --listen unix:///run/rex-mez/login-server.sock --runtime-root /run/rex-mez --accounts /etc/rex/accounts.jsonc --pam-service rex-login-server --log-format text --extra-listen tailnet-serve:///run/rex-mez/serve.sock
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
