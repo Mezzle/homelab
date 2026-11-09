@@ -82,6 +82,26 @@ storage:
       group: { name: mez }
 
   files:
+    - path: /etc/rex/accounts.jsonc
+      mode: 0600
+      contents:
+        local: os-configs/rex-accounts.jsonc
+
+    - path: /etc/pam.d/rex-login-server
+      mode: 0644
+      contents:
+        local: os-configs/common/rex-login-server.pam
+
+    - path: /usr/local/sbin/rex-install.sh
+      mode: 0755
+      contents:
+        local: os-configs/rex-install.sh
+
+    - path: /etc/systemd/system/rex.service
+      mode: 0644
+      contents:
+        local: os-configs/rex.service
+
     - path: /etc/hostname
       mode: 0644
       contents:

@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "accounts": {
+    "mez": { "principals": ["tailscale:Mezzle@github"] }
+  },
+  "defaults": { "tailscale:Mezzle@github": "mez" }
+}

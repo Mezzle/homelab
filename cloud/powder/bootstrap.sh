@@ -70,5 +70,30 @@ store_service_account_token
 install_chezmoi
 sudo chsh -s /usr/bin/zsh "$USER"
 
+# Install the same Rex files that GitOps maintains on every host.
+rex_repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+sudo install -D -m 0644 "$rex_repo_dir/coreos/os-configs/rex.service" \
+  /etc/systemd/system/rex.service
+sudo install -D -m 0755 "$rex_repo_dir/coreos/os-configs/rex-install.sh" \
+  /usr/local/sbin/rex-install.sh
+sudo install -D -m 0600 "$rex_repo_dir/coreos/os-configs/rex-accounts.jsonc" \
+  /etc/rex/accounts.jsonc
+sudo install -D -m 0644 "$rex_repo_dir/coreos/os-configs/powder/rex-login-server.pam" \
+  /etc/pam.d/rex-login-server
+sudo /usr/local/sbin/rex-install.sh
+
+# A separate deployment checkout keeps automated pulls away from development
+# branches. Public HTTPS fetches need no deploy credential.
+if [[ ! -d /srv/homelab-rex/.git ]]; then
+  sudo install -d -o mez -g mez /srv/homelab-rex
+  git clone --branch main https://github.com/Mezzle/homelab.git /srv/homelab-rex
+fi
+sudo install -D -m 0644 "$rex_repo_dir/coreos/os-configs/powder/rex-sync.service" \
+  /etc/systemd/system/rex-sync.service
+sudo install -D -m 0644 "$rex_repo_dir/coreos/os-configs/powder/rex-sync.timer" \
+  /etc/systemd/system/rex-sync.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now rex-sync.timer
+
 log "Bootstrap complete. Sign out and back in so Docker group membership and zsh apply."
 log "Then run cloud/powder/setup-signing-key.sh and the T3 service setup in the runbook."

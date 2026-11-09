@@ -73,6 +73,18 @@ sudo install -D -m 0644 "$ROOT_DIR/systemd/watch/gitops-sync.service" \
   /etc/systemd/system/gitops-sync.service
 sudo install -D -m 0644 "$ROOT_DIR/systemd/watch/gitops-sync.timer" \
   /etc/systemd/system/gitops-sync.timer
+# Install the same Rex files that GitOps maintains on every host.
+rex_repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+sudo install -D -m 0644 "$rex_repo_dir/coreos/os-configs/rex.service" \
+  /etc/systemd/system/rex.service
+sudo install -D -m 0755 "$rex_repo_dir/coreos/os-configs/rex-install.sh" \
+  /usr/local/sbin/rex-install.sh
+sudo install -D -m 0600 "$rex_repo_dir/coreos/os-configs/rex-accounts.jsonc" \
+  /etc/rex/accounts.jsonc
+sudo install -D -m 0644 "$rex_repo_dir/coreos/os-configs/watch/rex-login-server.pam" \
+  /etc/pam.d/rex-login-server
+sudo /usr/local/sbin/rex-install.sh
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now monitoring-stack.service gitops-sync.timer
 

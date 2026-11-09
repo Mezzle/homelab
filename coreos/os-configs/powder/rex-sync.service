@@ -1,0 +1,14 @@
+[Unit]
+Description=Pull homelab configuration and apply Powder Rex changes
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/srv/homelab-rex/.git
+
+[Service]
+Type=oneshot
+User=mez
+Group=mez
+WorkingDirectory=/srv/homelab-rex
+Environment=GITOPS_REPO_DIR=/srv/homelab-rex
+Environment=GITOPS_REX_ONLY=1
+ExecStart=/bin/bash /srv/homelab-rex/scripts/gitops-sync.sh

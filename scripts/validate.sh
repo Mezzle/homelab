@@ -45,7 +45,7 @@ while read -r src dest mode action; do
   [[ -f "coreos/os-configs/$src" ]] || fail "manifest source missing: $src"
   [[ "$dest" == /* ]] || fail "manifest destination not absolute: $src -> $dest"
   [[ "$mode" =~ ^0[0-7]{3}$ ]] || fail "manifest bad mode for $src: $mode"
-  case "${action:-}" in ""|sysctl|docker|sshd|systemd|operator) ;; *) fail "manifest unknown action for $src: $action" ;; esac
+  case "${action:-}" in ""|sysctl|docker|sshd|systemd|operator|rex) ;; *) fail "manifest unknown action for $src: $action" ;; esac
 done < coreos/os-configs/manifest.conf
 while IFS= read -r f; do
   rel="${f#coreos/os-configs/}"
@@ -70,6 +70,8 @@ fi
 
 # 5. python
 if python3 -m py_compile docker/watch/monitoring/scripts/*.py; then ok "python"; else fail "python"; fi
+
+if python3 scripts/tests/test_gitops_rex.py; then ok "Rex-only GitOps"; else fail "Rex-only GitOps"; fi
 
 if [[ $FAILED -ne 0 ]]; then echo "[validate] FAILED"; exit 1; fi
 echo "[validate] all checks passed"

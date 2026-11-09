@@ -145,3 +145,47 @@ sudo rpm-ostree rollback && sudo systemctl reboot
 ```
 
 For a fresh uCore install, run `cd coreos && ./transpile.sh <host>.bu`, install the resulting `.ign`, wait for the rebase reboots, then run `scripts/bootstrap.sh docker/<host>`. Oracle hosts use the cloud-init and bootstrap flow in `docs/oracle-reprovision.md`.
+
+## Rex terminal servers
+
+Rex runs on pancake, charm, powder and watch. GitOps installs the binary and
+starts `rex.service` when its manifest files first deploy. Cloud bootstrap
+installs the same files on Ubuntu; uCore bootstrap applies the manifest after
+provisioning. Powder's `rex-sync.timer` pulls a separate main-branch checkout
+at `/srv/homelab-rex` every five minutes and applies only Rex files and its own
+timer units, without syncing stack secrets or touching Docker stacks. Its
+development checkout is independent. No reboot or package layering is needed.
+
+In Rex, choose **Add Remote Host…** and enter
+`https://<host>.corgi-justice.ts.net:7297`. Tailscale Serve terminates HTTPS and
+forwards the authenticated identity through a root-only Unix socket. Existing
+Serve routes retain their ports. The root login server admits only
+`Mezzle@github`, mapped to the Linux account `mez` by
+`coreos/os-configs/rex-accounts.jsonc`. PAM checks the account and opens its
+session. Other identities and root account requests are rejected.
+
+The local login socket is `/run/rex-mez/login-server.sock`; account servers
+use systemd-logind's per-user runtime directory. View logs with
+`journalctl -u rex.service`.
+
+Rex is currently a preview. The official installer verifies the binary archive’s
+published SHA-256 checksum. Updates are explicit: run
+`sudo /usr/local/sbin/rex-install.sh --update` on each host. This restarts Rex
+and ends its sessions. Changes to the Rex service or installer also restart
+it when GitOps applies them. On an existing host without GitOps, install the
+Rex manifest files for that host at their listed destinations and run the
+installer.
+
+Add `tag:rex` alongside each server's existing tags. Keep client devices
+user-owned so Rex receives your user identity. Merge these entries into the
+existing Tailscale policy, then add the tag through Machines → Edit tags:
+
+```jsonc
+"tagOwners": { "tag:rex": ["Mezzle@github"] },
+"grants": [
+  { "src": ["Mezzle@github"], "dst": ["tag:rex"], "ip": ["tcp:7297"] }
+]
+```
+
+This grant adds access; broader existing rules still apply. Do not tag Cube's
+client connection or enable anonymous Rex access.
