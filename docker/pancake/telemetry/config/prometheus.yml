@@ -1,0 +1,18 @@
+# Prometheus scrapes nothing; the collector writes to its OTLP receiver.
+# Retention is the --storage.tsdb.retention.time flag in docker-compose.yml.
+otlp:
+  # Keep the metric names T3 Code declares (t3_server_cpu_utilization, not
+  # t3_server_cpu_utilization_ratio). Histograms still get _bucket/_sum/_count.
+  translation_strategy: UnderscoreEscapingWithoutSuffixes
+  # Resource attributes that become labels on every series. The rest are on
+  # target_info. dev comes from OTEL_RESOURCE_ATTRIBUTES on the T3 server.
+  promote_resource_attributes:
+    - service.name
+    - service.version
+    - host.name
+    - dev
+
+storage:
+  tsdb:
+    # Several T3 servers export on their own intervals.
+    out_of_order_time_window: 30m

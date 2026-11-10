@@ -1,0 +1,64 @@
+# PostHog-compatible batch endpoint. T3 Code POSTs
+#   {"api_key": "...", "batch": [{"uuid", "event", "distinct_id", "properties", "timestamp"}, ...]}
+# to /batch/. Each event becomes one JSON line in Loki, with its properties
+# flattened to the top level so LogQL `| json` sees inputTokens, model, ...
+# PostHog's own `$`-prefixed properties are dropped.
+#
+# Acknowledgements on the sink make the response wait for Loki: 200 once
+# written, 500 if the write failed (T3 retries), 400 if Loki rejected it (T3
+# drops the batch). api_key is dropped, not checked; the tailnet ACL is the
+# auth boundary.
+#
+# Vector interpolates `$NAME` in config files, so the program below never
+# spells a `$` followed by a name.
+
+data_dir: /var/lib/vector
+
+api:
+  enabled: true
+  address: 127.0.0.1:8686
+
+sources:
+  posthog:
+    type: http_server
+    address: 0.0.0.0:8080
+    method: POST
+    # Prefix match, so /batch and /batch/ both work.
+    path: /batch
+    strict_path: false
+    framing:
+      method: bytes
+    decoding:
+      codec: json
+
+transforms:
+  events:
+    type: remap
+    inputs: [posthog]
+    source: |
+      . = map_values(array!(.batch)) -> |item| {
+        item = object!(item)
+        properties = object(item.properties) ?? {}
+        properties = filter(properties) -> |key, _value| { !starts_with(key, "$") }
+        event = merge(properties, {
+          "event": item.event,
+          "distinct_id": item.distinct_id,
+          "uuid": item.uuid
+        })
+        event.timestamp = parse_timestamp(item.timestamp, "%+") ?? now()
+        event
+      }
+
+sinks:
+  loki:
+    type: loki
+    inputs: [events]
+    endpoint: http://loki:3100
+    encoding:
+      codec: json
+    labels:
+      service_name: t3-analytics
+      event: "{{ event }}"
+    out_of_order_action: accept
+    acknowledgements:
+      enabled: true

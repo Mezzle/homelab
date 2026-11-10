@@ -1,0 +1,15 @@
+{
+  "TCP": {
+    "443": { "HTTPS": true },
+    "4318": { "TCPForward": "otel-collector:4318" },
+    "8443": { "HTTPS": true }
+  },
+  "Web": {
+    "${TS_CERT_DOMAIN}:443": {
+      "Handlers": { "/": { "Proxy": "http://grafana:3000" } }
+    },
+    "${TS_CERT_DOMAIN}:8443": {
+      "Handlers": { "/": { "Proxy": "http://vector:8080" } }
+    }
+  }
+}

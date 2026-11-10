@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: t3
+    folder: T3 Code
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards

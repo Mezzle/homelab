@@ -411,6 +411,9 @@ systemd:
     - name: stack@speedtest.service
       enabled: true
 
+    - name: stack@telemetry.service
+      enabled: true
+
     - name: stack@infra.service
       enabled: true
       dropins:

@@ -98,6 +98,13 @@ No secrets.
 |---|---|
 | `TS_AUTHKEY` | joins the `ts-mealie` node as `tag:funnel`. A non-ephemeral pre-auth key with that tag, or an OAuth client secret (`auth_keys` write, owns `tag:funnel`) suffixed `?ephemeral=false`. Only needed for the first join |
 
+### `docker.pancake.telemetry`
+
+| Field | Notes |
+|---|---|
+| `TS_AUTHKEY` | joins the `ts-telemetry` node as `tag:telemetry`. A non-ephemeral pre-auth key with that tag, or an OAuth client secret (`auth_keys` write, owns `tag:telemetry`) suffixed `?ephemeral=false`. Only needed for the first join |
+| `GF_SECURITY_ADMIN_PASSWORD` | Grafana `admin` password, no `$`. Only applied when Grafana first creates its database; later changes go through `grafana cli admin reset-admin-password` |
+
 ### `docker.charm.infra`
 
 | Field | Notes |
@@ -147,6 +154,7 @@ check docker.pancake.immich DB_PASSWORD IMMICH_TRANSCODING_BACKEND IMMICH_ML_BAC
 check docker.pancake.infra TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET TAILNET
 check docker.pancake.speedtest APP_KEY
 check docker.pancake.mealie TS_AUTHKEY
+check docker.pancake.telemetry TS_AUTHKEY GF_SECURITY_ADMIN_PASSWORD
 check docker.charm.infra TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_CLIENT_SECRET
 check docker.charm.home MQTT_USER MQTT_PASS MYSQL_ROOT_PASSWORD MYSQL_PASSWORD
 check docker.charm.monitoring ADGUARD_PRIMARY_URL ADGUARD_PRIMARY_USER ADGUARD_PRIMARY_PASS ADGUARD_REPLICA_USER ADGUARD_REPLICA_PASS

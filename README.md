@@ -16,6 +16,8 @@ Infrastructure-as-code for a multi-machine homelab using uCore at home and Ubunt
 │  music      Music Assistant                 │  │                              │
 │  speedtest  Speedtest Tracker               │  └──────────────────────────────┘
 │  mealie     Recipes (public via Funnel)     │
+│  telemetry  T3 Code OTLP + analytics,       │
+│             Grafana (tailnet only)          │
 │  infra      DockTail, Portainer, Homepage,  │
 │             Diun                            │  ┌──────────────────────────────┐
 │                                             │  │  watch (Oracle Cloud E2)     │
@@ -132,7 +134,41 @@ Full item list and verification snippet: `docs/1password-setup.md`.
 
 ## Tailscale services
 
-DockTail publishes labelled home containers as Tailscale Services at `https://<name>.<tailnet>.ts.net`. Mealie is the exception: it runs its own `ts-mealie` node and is public through Funnel. Watch exposes Uptime Kuma through Tailscale Serve.
+DockTail publishes labelled home containers as Tailscale Services at `https://<name>.<tailnet>.ts.net`. Mealie is the exception: it runs its own `ts-mealie` node and is public through Funnel. Telemetry also runs its own node, `ts-telemetry`, because it serves three ports and stays off Funnel. Watch exposes Uptime Kuma through Tailscale Serve.
+
+## T3 Code telemetry
+
+`docker/pancake/telemetry` receives telemetry from T3 Code servers on the tailnet. It is reachable only through the `telemetry` node, tagged `tag:telemetry`:
+
+| URL | What |
+|---|---|
+| `https://telemetry.corgi-justice.ts.net` | Grafana, with the *T3 Code server* and *T3 Code analytics* dashboards |
+| `http://telemetry.corgi-justice.ts.net:4318/v1/{traces,metrics,logs}` | OTLP over HTTP, JSON or protobuf → OpenTelemetry Collector → Tempo, Prometheus, Loki |
+| `https://telemetry.corgi-justice.ts.net:8443/batch/` | PostHog batch format → Vector → Loki, one line per event under `{service_name="t3-analytics"}` |
+
+Everything keeps 14 days. Spans and logs can contain thread titles and error text, so their data sits in named volumes that `backup-host.sh` does not copy.
+
+On each T3 server:
+
+```bash
+T3CODE_OTLP_TRACES_URL=http://telemetry.corgi-justice.ts.net:4318/v1/traces
+T3CODE_OTLP_METRICS_URL=http://telemetry.corgi-justice.ts.net:4318/v1/metrics
+T3CODE_OTLP_LOGS_URL=http://telemetry.corgi-justice.ts.net:4318/v1/logs
+T3CODE_POSTHOG_HOST=https://telemetry.corgi-justice.ts.net:8443
+T3CODE_POSTHOG_KEY=homelab        # sent but not checked
+OTEL_RESOURCE_ATTRIBUTES=dev=<name>,host.name=<host>
+```
+
+Prometheus keeps T3's metric names as declared (`translation_strategy: UnderscoreEscapingWithoutSuffixes`) and turns `host.name` and `dev` into the `host_name` and `dev` labels. Neither endpoint checks credentials, so the tailnet policy is the access control. If the policy is not allow-all, add:
+
+```jsonc
+"tagOwners": { "tag:telemetry": ["Mezzle@github"] },
+"grants": [
+  { "src": ["Mezzle@github"], "dst": ["tag:telemetry"], "ip": ["tcp:443", "tcp:4318", "tcp:8443"] }
+]
+```
+
+Add any tagged T3 hosts to `src`.
 
 ## OS management
 

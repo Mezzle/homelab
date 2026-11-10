@@ -1,0 +1,247 @@
+##############################################################################
+# Telemetry — receiver and dashboards for T3 Code servers on the tailnet
+#
+# Two streams arrive, both through the ts-telemetry node, which is reachable
+# on the tailnet only (no Funnel, no host ports):
+#
+#   http://telemetry.corgi-justice.ts.net:4318/v1/{traces,metrics,logs}
+#       OTLP over HTTP, JSON or protobuf → otel-collector → Tempo, Prometheus
+#       (its native OTLP receiver), Loki.
+#   https://telemetry.corgi-justice.ts.net:8443/batch/
+#       PostHog batch format → Vector, which splits the batch into one JSON
+#       line per event and writes it to Loki as {service_name="t3-analytics"}.
+#       It answers 200 only once Loki has the events, 500 if Loki failed (T3
+#       retries) and 400 if Loki rejected them (T3 drops the batch). The
+#       api_key is not checked or stored: the tailnet ACL is the auth boundary.
+#   https://telemetry.corgi-justice.ts.net
+#       Grafana, with data sources and dashboards provisioned from config/.
+#
+# Retention is 14 days everywhere: Prometheus --storage.tsdb.retention.time,
+# Loki retention_period, Tempo's default block_retention.
+#
+# Spans and logs carry thread titles and error text. Their data lives in
+# named volumes, not ./appdata, so backup-host.sh doesn't copy it to the NAS
+# where it would outlive the 14 days. Nothing here needs a backup: Grafana is
+# fully provisioned and the rest is disposable.
+#
+# Memory limits add up to about 2.4G.
+#
+# Required:
+#   - Copy .env.example to .env and fill in your values
+##############################################################################
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-security-opts: &security-opts
+  security_opt:
+    - no-new-privileges:true
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 30s
+
+networks:
+  telemetry:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-telemetry
+
+volumes:
+  ts-state:
+  prometheus:
+  loki:
+  tempo:
+  grafana:
+  vector:
+
+services:
+  ##########################################################################
+  # Tailscale sidecar — the telemetry node. serve.json maps 443 → Grafana,
+  # 4318 → the collector (plain TCP; WireGuard encrypts it) and 8443 →
+  # Vector. The ACL decides who can reach it.
+  ##########################################################################
+  ts-telemetry:
+    image: tailscale/tailscale:latest
+    container_name: ts-telemetry
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - telemetry
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      # Without this, every container start logs in again with the key above,
+      # which may be single-use and already spent.
+      TS_AUTH_ONCE: "true"
+      # Not `hostname: telemetry`: see the same note in ../mealie.
+      TS_HOSTNAME: telemetry
+      TS_EXTRA_ARGS: --advertise-tags=tag:telemetry
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ts-state:/var/lib/tailscale
+      - ./config/tailscale/serve.json:/config/serve.json:ro,z
+    logging: *default-logging
+
+  ##########################################################################
+  # OpenTelemetry Collector — the single OTLP/HTTP endpoint, fanning out to
+  # Tempo, Prometheus and Loki
+  ##########################################################################
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    container_name: otel-collector
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - telemetry
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./config/otel-collector.yaml:/etc/otelcol/config.yaml:ro,z
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    logging: *default-logging
+
+  ##########################################################################
+  # Prometheus — metrics, written by the collector to its OTLP receiver
+  ##########################################################################
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - telemetry
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=14d
+      - --web.enable-otlp-receiver
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+      - prometheus:/prometheus
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/ready"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Loki — OTLP logs and the analytics events
+  ##########################################################################
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - telemetry
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./config/loki.yaml:/etc/loki/config.yaml:ro,z
+      - loki:/loki
+    logging: *default-logging
+
+  ##########################################################################
+  # Tempo — traces
+  ##########################################################################
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - telemetry
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    volumes:
+      - ./config/tempo.yaml:/etc/tempo/config.yaml:ro,z
+      - tempo:/var/tempo
+    logging: *default-logging
+
+  ##########################################################################
+  # Vector — PostHog-compatible /batch/ endpoint, events → Loki
+  ##########################################################################
+  vector:
+    image: timberio/vector:latest-alpine
+    container_name: vector
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - telemetry
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    command: ["--config", "/etc/vector/vector.yaml"]
+    volumes:
+      - ./config/vector.yaml:/etc/vector/vector.yaml:ro,z
+      - vector:/var/lib/vector
+    depends_on:
+      - loki
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8686/health"]
+    logging: *default-logging
+
+  ##########################################################################
+  # Grafana — dashboards. Data sources and dashboards are provisioned from
+  # config/grafana; edits made in the UI to provisioned dashboards can't be
+  # saved over them. Save a copy, or change the JSON here.
+  ##########################################################################
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    <<: *security-opts
+    networks:
+      - telemetry
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    environment:
+      TZ: Europe/London
+      GF_SERVER_ROOT_URL: https://telemetry.corgi-justice.ts.net
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/t3-server.json
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./config/grafana/dashboards:/etc/grafana/dashboards:ro,z
+      - grafana:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+    logging: *default-logging
