@@ -29,9 +29,25 @@ Butane files under `coreos/` only run at install. Editing a `.bu` changes nothin
 - **New systemd units** installed via the manifest still need `systemctl enable --now` once on each existing host. The manifest reloads; it doesn't enable. gitops-sync only installs files that changed since the last applied commit (`refs/gitops-sync/applied`); `gitops-sync.sh --apply-os-configs` installs everything.
 - **Host-side git commits** (there is a `pancake` remote) make the next `--ff-only` pull fail. gitops-sync now notifies on that, but the fix is to push from the laptop.
 
+## Files that change together
+
+- **Adding a stack:** follow "Adding a stack" in the README.
+- **Removing a stack:** delete the stack directory and everything that points at it:
+  - `stack@<name>.service` in the host's `.bu`, and any `stack@<name>.service.d/` drop-ins in `coreos/os-configs/<host>/` with their manifest lines.
+  - If DockTail joined its network: the network in the infra stack's compose file and the stack in the infra `order.conf` drop-in.
+  - The Homepage tile, and the stack's monitors in `seed-uptime-kuma.py` and `add-container-monitors.py`.
+  - The stack's case in `excludes_for` in `scripts/backup-host.sh`, and the stack list in the host's `motd.sh`.
+  - The 1Password docs and the README.
+
+  gitops-sync doesn't tear down a deleted stack, and the pull deletes its compose file. Take a final backup before the merge. After it, on the host: `docker compose -p <name> down`, `systemctl disable stack@<name>.service`, delete any installed drop-in directory under `/etc/systemd/system/`, and remove the stack's containers from `heartbeat-tokens.env` (a missing container reports down). The seed scripts only add, so delete its monitors in Uptime Kuma by hand.
+
 ## Conventions
 
 - One directory per stack, `docker-compose.yml` plus `.env.example`. `stack.sh` is a symlink to `scripts/stack.sh`; stack-specific commands go in `stack.local.sh`.
 - Every service carries the `x-logging` anchor, a memory limit, `no-new-privileges` unless it needs the socket, and `docktail.service.*` labels if it should be reachable over the tailnet.
 - Floating tags are the default. Pin only where a major bump breaks something, and say why in a comment.
-- Every check that could be a timer should be a timer. The Hermes agent is for unknown unknowns, not for anything found twice.
+- Every check that could be a timer should be a timer.
+
+## Before you finish
+
+Say which checks you ran (`./scripts/validate.sh` at least) and which you couldn't, such as anything that needs a host.
