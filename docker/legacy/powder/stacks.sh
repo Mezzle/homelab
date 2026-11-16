@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-STACKS=(infra monitoring agent)
+STACKS=(infra monitoring)
 
 case "${1:-help}" in
   up-all)

@@ -61,7 +61,7 @@ Infrastructure-as-code for a multi-machine homelab using uCore at home and Ubunt
 ├── docs/
 │   ├── 1password-setup.md      # every 1Password item and field
 │   ├── oracle-reprovision.md   # Oracle Cloud rebuild walkthrough
-│   └── legacy/                 # retired Powder CoreOS and Hermes docs
+│   └── legacy/                 # retired Powder CoreOS docs
 └── AGENTS.md                   # gotchas for anyone (human or agent) editing this repo
 ```
 
