@@ -19,7 +19,7 @@
 # with the percentage in the message.
 #
 # A monitor going Down stops nothing here — Kuma flips the monitor and fires
-# the Discord + Hermes-agent webhooks. Kuma's own "No heartbeat in the time
+# the Discord webhook. Kuma's own "No heartbeat in the time
 # window" also covers the case where THIS host or the timer dies (the push
 # simply stops), so a dead heartbeat script is itself an alert.
 #

@@ -215,9 +215,6 @@ systemd:
     - name: stack@monitoring.service
       enabled: true
 
-    - name: stack@agent.service
-      enabled: true
-
     ##################################################################
     # Shared units from coreos/os-configs/common/. gitops-sync keeps
     # them current after install; see manifest.conf.
