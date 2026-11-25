@@ -158,6 +158,10 @@ services:
       OPENVPN_USER: ${PIA_USER}
       OPENVPN_PASSWORD: ${PIA_PASS}
       SERVER_REGIONS: ${PIA_REGION:-Netherlands}
+      # Refresh the PIA server list through the tunnel every 20 days. A stale
+      # list (PIA moved Netherlands off 158.173.21.x) left gluetun failing TLS
+      # on dead IPs. The wiki advises no less than 360h.
+      UPDATER_PERIOD: 480h
       # Built-in HTTP proxy on :8888 — Prowlarr tunnels indexer searches
       # through this instead of sharing gluetun's network namespace.
       HTTPPROXY: "on"
